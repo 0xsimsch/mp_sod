@@ -1,0 +1,34 @@
+24288 citizen-rows over 66 unpaused samples ([66]..[131])
+
+== A1: tick rate vs distance to player
+rate         rows  dist min   median      max  sameBldg  visible  asleep
+veryHigh      933       5.8     35.1    173.6      0.0%    61.1%    0.0%
+high         3244       3.4     78.9    205.1      0.0%    47.9%    0.0%
+medium        120      25.6     67.5    113.0      0.0%    24.2%    0.0%
+low          3641       5.1     80.5    167.9      0.0%    91.4%    0.0%
+veryLow     16350       6.0     72.4    185.5      0.0%     9.6%    2.0%
+
+rate share per distance bucket:
+        dist   rows  veryHigh      high    medium       low   veryLow
+        0-10     37     51.4%     32.4%      0.0%      8.1%      8.1%
+       10-25   1090     39.5%      7.5%      0.0%      6.9%     46.1%
+       25-50   3641      2.3%     11.7%      0.9%     12.8%     72.3%
+      50-100  16087      2.1%     10.8%      0.5%     15.3%     71.3%
+     100-200   3428      1.7%     28.8%      0.1%     18.8%     50.8%
+     200-inf      5      0.0%    100.0%      0.0%      0.0%      0.0%
+
+== A1b: how often does each citizen's AI actually update? (aiLastUpdated changes between samples)
+  veryHigh   updated between consecutive samples:  72.8% of 930
+  high       updated between consecutive samples:  96.6% of 2879
+  medium     updated between consecutive samples:  62.5% of 120
+  low        updated between consecutive samples:  44.9% of 3641
+  veryLow    updated between consecutive samples:  41.5% of 16350
+
+== A2: culling state vs distance
+        dist   rows        visible    roomVisible roomGeomLoaded       goActive     animatorOn  rend on/tot  coll on/tot
+        0-10     37         100.0%         100.0%         100.0%         100.0%         100.0%       100.0%       100.0%
+       10-25   1090          70.6%          70.6%          81.1%         100.0%         100.0%        71.2%       100.0%
+       25-50   3641          37.1%          37.0%          49.2%         100.0%         100.0%        38.1%       100.0%
+      50-100  16087          24.1%          23.9%          34.3%         100.0%          99.7%        25.2%        99.9%
+     100-200   3428          29.2%          29.1%          48.6%         100.0%         100.0%        30.4%       100.0%
+     200-inf      5           0.0%           0.0%           0.0%         100.0%         100.0%         2.4%       100.0%

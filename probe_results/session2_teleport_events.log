@@ -1,0 +1,4 @@
+21:52:48 t=448.72 F8 BEFORE target=132 "Latrice Bowden" dist=133.8 dist=133.8 rate=veryLow desired=veryLow visible=False room=381 roomVisible=False geomLoaded=False roomGoActive=False roomColliders=0/0 walls=False sample=131
+21:52:48 t=448.75 F8 AFTER-TELEPORT target=132 dist=6.1 rate=veryHigh desired=veryHigh visible=True room=381 roomVisible=True geomLoaded=True roomGoActive=True roomColliders=100/103 walls=True sample=131
+21:53:17 t=477.38 F9 BEFORE target=132 dist=1.3 rate=veryHigh desired=veryHigh visible=True room=381 roomVisible=True geomLoaded=True roomGoActive=True roomColliders=235/236 walls=True sample=140
+21:53:17 t=477.41 F9 AFTER-TELEPORT target=132 dist=136.0 rate=veryHigh desired=veryHigh visible=True room=381 roomVisible=False geomLoaded=True roomGoActive=True roomColliders=3/236 walls=True sample=140

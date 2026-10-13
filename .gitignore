@@ -1,0 +1,20 @@
+# build output
+bin/
+obj/
+dist/
+__pycache__/
+*.pyc
+
+# the game's own files and code derived from it (not ours to publish)
+game/
+decompiled/
+
+# large generated analysis data
+analysis/tools/binary.pickle
+analysis/tools/cache.json
+determinism_test/decoded/
+determinism_test/captures/
+probe_results/*.csv
+
+# copies of the player's saves
+probe_results/save_backup/

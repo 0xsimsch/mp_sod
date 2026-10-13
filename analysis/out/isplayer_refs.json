@@ -1,0 +1,437 @@
+[
+ {
+  "method": "ActionController::AIPickUpItemFromFloor",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::AnswerTelephone",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::BargeDoor",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::Buy",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::Call",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::CleanUp",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::CloseDoor",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::DebtCollection",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::Dial",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::Dispose",
+  "class": "ActionController",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "ActionController::Drink",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::ExecuteAction",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::FameAndFortune",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::GetUp",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::LockDoor",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::LogOnComputer",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::Mugging",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::Open",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::OpenDoor",
+  "class": "ActionController",
+  "isPlayerReads": 3
+ },
+ {
+  "method": "ActionController::Return",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::Search",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::TakeBlueprints",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::TakeKey",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::TakeMoney",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::TakeSyncDisk",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::TalkTo",
+  "class": "ActionController",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "ActionController::TriggerAlarm",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::TurnOffMainLight",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::TurnOffSecondaryLight",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::TurnOnMainLight",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::TurnOnSecondaryLight",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::UnlockDoor",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "ActionController::UseKeypad",
+  "class": "ActionController",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "ActionController::Vomit",
+  "class": "ActionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Actor::AddPersuedBy",
+  "class": "Actor",
+  "isPlayerReads": 3
+ },
+ {
+  "method": "Actor::AddToKeyring",
+  "class": "Actor",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Actor::AddToSeesIllegal",
+  "class": "Actor",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Actor::HearIllegal",
+  "class": "Actor",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Actor::RemoveFromSeesIllegal",
+  "class": "Actor",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Actor::RemovePersuedBy",
+  "class": "Actor",
+  "isPlayerReads": 3
+ },
+ {
+  "method": "Actor::SetStealthMode",
+  "class": "Actor",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "Actor::SightingCheck",
+  "class": "Actor",
+  "isPlayerReads": 14
+ },
+ {
+  "method": "Actor::UpdateGameLocation",
+  "class": "Actor",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "Actor::UpdateOverallVisibility",
+  "class": "Actor",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Citizen::RecieveDamage",
+  "class": "Citizen",
+  "isPlayerReads": 5
+ },
+ {
+  "method": "CitizenBehaviour::GameSpeedChange",
+  "class": "CitizenBehaviour",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "GameplayController._003CDoorKnockSounds_003Ed__136::MoveNext",
+  "class": "GameplayController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "GameplayController::AddHotelGuest",
+  "class": "GameplayController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "GameplayController::RemoveHotelGuest",
+  "class": "GameplayController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Human.ConversationInstance::EndConversation",
+  "class": "Human",
+  "isPlayerReads": 4
+ },
+ {
+  "method": "Human::DDSParticipantConditionCheck",
+  "class": "Human",
+  "isPlayerReads": 14
+ },
+ {
+  "method": "Human::GetCitizenName",
+  "class": "Human",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Human::GetFirstName",
+  "class": "Human",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Human::GetSurName",
+  "class": "Human",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Human::IsTrespassing",
+  "class": "Human",
+  "isPlayerReads": 4
+ },
+ {
+  "method": "Human::ParseDDSMessage",
+  "class": "Human",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "Human::SetFootwear",
+  "class": "Human",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Human::SetInConversation",
+  "class": "Human",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Human::SetResidence",
+  "class": "Human",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Human::SetupGeneral",
+  "class": "Human",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Human::TryGiveItem",
+  "class": "Human",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Interactable.UsagePoint::PositionUpdate",
+  "class": "Interactable",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Interactable::AddNewDynamicFingerprint",
+  "class": "Interactable",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "Interactable::OnInteraction",
+  "class": "Interactable",
+  "isPlayerReads": 3
+ },
+ {
+  "method": "Interactable::SetAsNotInventory",
+  "class": "Interactable",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "InteractionController::OnPlayerLookAtChange",
+  "class": "InteractionController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "MurderController::CleanupKidnapperTaunt",
+  "class": "MurderController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "MurderController::PickNewMurderer",
+  "class": "MurderController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "MurderController::PickNewVictim",
+  "class": "MurderController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "NewAIController.ChaseLogic::GenerateProjectedNode",
+  "class": "NewAIController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "NewAIController.ChaseLogic::UpdateLastSeen",
+  "class": "NewAIController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "NewAIController::AnswerDoor",
+  "class": "NewAIController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "NewAIController::AttackUpdate",
+  "class": "NewAIController",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "NewAIController::InstantPersuitCheck",
+  "class": "NewAIController",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "NewAIController::Investigate",
+  "class": "NewAIController",
+  "isPlayerReads": 3
+ },
+ {
+  "method": "NewAIController::IsMuggingValid",
+  "class": "NewAIController",
+  "isPlayerReads": 6
+ },
+ {
+  "method": "NewAIController::OnNewTrackTarget",
+  "class": "NewAIController",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "NewAIController::PersuitUpdate",
+  "class": "NewAIController",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "NewAIController::StartAttack",
+  "class": "NewAIController",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "NewAIController::TrackingSpookCheck",
+  "class": "NewAIController",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "NewAIController::TriggerReactionIndicator",
+  "class": "NewAIController",
+  "isPlayerReads": 2
+ },
+ {
+  "method": "NewAIController::UpdateHumanDrawnWeapon",
+  "class": "NewAIController",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "NewDoor::Barge",
+  "class": "NewDoor",
+  "isPlayerReads": 7
+ },
+ {
+  "method": "NewDoor::SetLocked",
+  "class": "NewDoor",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "NewGameLocation::AddEscalation",
+  "class": "NewGameLocation",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "SessionData::Start",
+  "class": "SessionData",
+  "isPlayerReads": 1
+ },
+ {
+  "method": "SessionData::StartTestScene",
+  "class": "SessionData",
+  "isPlayerReads": 1
+ }
+]

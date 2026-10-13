@@ -1,0 +1,41 @@
+top-level keys: ['build', 'citizens', 'cityName', 'citySize', 'cityTiles', 'criminals', 'districts', 'groups', 'interactables', 'metas', 'multiPage', 'pipes', 'playersApartment', 'population', 'seed', 'streets']
+  citizens: 319 vs 319 entries
+  cityTiles: 30 vs 30 entries
+  criminals: 1 vs 1 entries
+  districts: 5 vs 5 entries
+  groups: 73 vs 73 entries
+  interactables: 34426 vs 34426 entries
+  metas: 1732 vs 1732 entries
+  multiPage: 493 vs 493 entries
+  pipes: 116 vs 116 entries
+  streets: 27 vs 27 entries
+
+TOTAL DIFFERENCES (ignoring ['date']): 15
+
+by field:
+         2  .interactables[].wPos.x
+         2  .interactables[].wPos.z
+         2  .interactables[].spWPos.x
+         2  .interactables[].spWPos.z
+         2  .interactables[].lPos.x
+         2  .interactables[].lPos.z
+         1  .interactables[].wPos.y
+         1  .interactables[].spWPos.y
+         1  .interactables[].lPos.y
+
+examples:
+   .interactables[34423].wPos.x value -45.899986267089844 | -47.699989318847656
+   .interactables[34423].wPos.z value 7.200003147125244 | 10.80000114440918
+   .interactables[34423].spWPos.x value -45.899986267089844 | -47.699989318847656
+   .interactables[34423].spWPos.z value 7.200003147125244 | 10.80000114440918
+   .interactables[34423].lPos.x value 10.800003051757812 | 9.0
+   .interactables[34423].lPos.z value 7.200005054473877 | 10.800003051757812
+   .interactables[34424].wPos.y value 43.29999923706055 | 43.20000076293945
+   .interactables[34424].wPos.x value -31.4999942779541 | -29.235990524291992
+   .interactables[34424].wPos.z value -5.39999532699585 | -9.612994194030762
+   .interactables[34424].spWPos.y value 43.29999923706055 | 43.20000076293945
+   .interactables[34424].spWPos.x value -31.4999942779541 | -29.235990524291992
+   .interactables[34424].spWPos.z value -5.39999532699585 | -9.612994194030762
+   .interactables[34424].lPos.y value 0.09999847412109375 | 0.0
+   .interactables[34424].lPos.x value -12.599998474121094 | -10.335994720458984
+   .interactables[34424].lPos.z value -5.399993419647217 | -9.612992286682129

@@ -1,0 +1,301 @@
+23:05:59.670 SoD Co-op loaded (MaxPlayers=2)
+23:06:34.720 registered local player as P0 (host)
+23:07:52.468 P1 "Ghost" possessed citizen 2 "Odion Sarr"
+23:07:52.473 TRESPASS body=P1 "Ghost" room=1 result=False escalation=0
+23:07:52.474 F5: P1 "Ghost" added as ghost (replays your movement 3s behind)
+23:07:52.475 BOOST citizen 213 "Clara Bos" near P1 "Ghost"
+23:07:52.475 BOOST citizen 290 "Edgerin Newton" near P1 "Ghost"
+23:07:52.475 BOOST citizen 311 "Tobias Reid" near P1 "Ghost"
+23:07:52.476 BOOST citizen 318 "Jenson Dubois" near P1 "Ghost"
+23:07:52.476 BOOST citizen 331 "Caitlin Gallagher" near P1 "Ghost"
+23:07:52.476 BOOST citizen 336 "Gerree Mathis" near P1 "Ghost"
+23:07:52.476 BOOST citizen 349 "Matthew Parker" near P1 "Ghost"
+23:07:52.476 BOOST citizen 358 "Shareese Searcy" near P1 "Ghost"
+23:07:52.476 BOOST citizen 360 "Bunyamin Quraishi" near P1 "Ghost"
+23:07:55.836 TRESPASS body=P1 "Ghost" room=1263 result=True escalation=2
+23:07:55.836 F7: P1 "Ghost" placed in home of citizen 6 "Inga Kovalchuk" room=1263; watching for SEES-ILLEGAL / PURSUED-BY / TRESPASS
+23:07:55.996 BOOST citizen 6 "Inga Kovalchuk" near P1 "Ghost"
+23:07:55.996 BOOST citizen 7 "Eva Zukauskas" near P1 "Ghost"
+23:07:55.997 BOOST citizen 123 "Zchon Metcalf" near P1 "Ghost"
+23:07:55.997 BOOST citizen 124 "Cian Quinn" near P1 "Ghost"
+23:07:55.997 BOOST citizen 126 "Paola Baltazar" near P1 "Ghost"
+23:07:55.997 BOOST citizen 138 "Chantrelle Fletcher" near P1 "Ghost"
+23:07:55.998 BOOST citizen 204 "Ru Bai" near P1 "Ghost"
+23:07:55.998 BOOST citizen 205 "Keisha Petty" near P1 "Ghost"
+23:07:55.998 BOOST citizen 229 "Thomas Muller" near P1 "Ghost"
+23:07:55.998 BOOST citizen 230 "Khianna Cooley" near P1 "Ghost"
+23:07:56.997 BOOST citizen 286 "Ashley Crawford" near P1 "Ghost"
+23:08:06.202 F8: local player joined room 1263 (geomLoaded=True, dist to P1 6.0 m)
+23:08:25.062 BOOST citizen 206 "Ichika Murakami" near P1 "Ghost"
+23:08:29.531 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.29
+23:08:29.902 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.29
+23:08:29.929 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.29
+23:08:30.269 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.29
+23:08:30.270 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:30.369 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.29
+23:08:30.637 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.29
+23:08:30.637 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:30.736 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.29
+23:08:31.003 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:31.003 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:31.534 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:31.736 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:31.737 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:31.935 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:32.104 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:32.105 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:32.352 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:32.472 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:32.472 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:32.734 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:32.836 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:32.836 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:33.135 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:33.202 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:33.203 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:33.535 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:33.569 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:33.569 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:33.935 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:33.937 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:34.303 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:34.303 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:34.335 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:34.669 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:34.670 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:34.735 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:35.035 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:35.035 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:35.135 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:35.403 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:35.403 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:35.535 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:35.770 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:35.770 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:35.968 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:36.137 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:36.138 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:36.369 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:36.504 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:36.505 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:36.735 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:36.874 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:36.875 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:37.137 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:37.235 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:37.236 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:37.536 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:37.607 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:37.607 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:37.936 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:37.973 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:37.973 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:38.349 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:38.351 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:38.708 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:38.708 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:38.741 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:39.077 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:39.077 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:39.139 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:39.441 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.29
+23:08:39.441 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:39.542 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:39.809 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:39.809 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:39.941 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:40.175 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:40.175 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:40.340 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:40.544 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:40.544 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:40.741 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:40.907 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:40.908 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:41.140 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:41.274 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:41.275 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:41.540 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:41.641 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:41.641 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:41.939 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:42.006 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:42.007 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:42.339 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:42.374 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:42.374 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:42.739 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:42.740 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:43.108 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:43.108 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:43.140 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:43.474 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:43.474 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:43.541 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:43.840 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:43.840 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:43.940 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:44.208 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:44.208 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:44.339 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:44.574 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:44.574 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:44.740 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:44.940 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:44.940 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:45.141 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:45.308 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:45.308 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:45.574 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:45.676 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:45.677 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:45.940 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:46.040 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:46.040 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:46.341 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:46.411 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:46.412 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:46.741 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:46.777 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:46.778 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:47.140 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:47.141 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:47.508 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:47.508 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:47.540 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:47.875 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:47.876 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:47.942 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:48.244 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:48.245 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:48.342 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:48.614 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:48.615 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:48.742 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:48.977 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:48.977 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:49.109 BOOST citizen 263 "Nevio Basque" near P1 "Ghost"
+23:08:49.142 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:49.342 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:49.342 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:49.542 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:49.710 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:49.710 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:49.948 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:50.075 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:50.075 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:50.347 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:50.448 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:50.449 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:50.748 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:50.816 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:50.816 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:51.148 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:51.182 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:51.182 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:51.547 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:51.549 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:51.917 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:51.917 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:52.283 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:52.283 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:52.380 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:52.652 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:52.652 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:52.781 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:53.014 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:53.014 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:53.180 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:53.381 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:53.382 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:53.580 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:53.748 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:53.748 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:53.982 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:54.117 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:54.118 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:54.348 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:54.488 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:54.488 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:54.749 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:54.853 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:54.853 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:55.148 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:55.217 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:55.218 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:55.548 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:55.581 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:55.582 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:55.949 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:55.949 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:55.981 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:56.320 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:56.321 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:56.384 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:56.686 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:56.686 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:56.784 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:57.051 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:57.051 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:57.184 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:57.184 SEES-ILLEGAL observer=citizen 258 "Jade Harper" target=P0 "Host" (local) focus=0.29
+23:08:57.418 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:57.419 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:57.552 SEES-ILLEGAL observer=citizen 258 "Jade Harper" target=P0 "Host" (local) focus=0.29
+23:08:57.583 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:57.618 P1 "Ghost" released citizen 2
+23:08:57.619 F4: removed P1 "Ghost"
+23:08:57.784 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:57.785 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:57.951 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:58.153 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:58.153 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:58.352 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:58.525 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:58.526 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:58.750 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:58.886 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:58.886 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:59.150 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:59.251 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:59.251 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:59.583 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:59.617 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:59.617 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:08:59.984 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:08:59.986 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:00.352 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:00.352 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:00.717 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:00.718 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:00.783 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:01.084 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:01.084 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:01.153 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:01.450 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:01.451 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:01.550 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:01.818 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:01.818 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:01.951 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:02.187 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:02.188 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:02.351 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:02.551 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:02.552 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:02.750 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:02.918 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:02.918 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:03.150 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:03.285 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:03.285 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:03.550 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:03.652 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:03.652 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:03.950 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:04.018 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:04.018 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:04.350 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:04.384 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"
+23:09:04.751 SEES-ILLEGAL observer=citizen 259 "Niharika Vartak" target=P0 "Host" (local) focus=0.30
+23:09:04.752 PURSUED-BY instance=P0 "Host" (local) newTarget=citizen 259 "Niharika Vartak"

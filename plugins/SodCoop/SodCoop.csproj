@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>SodCoop</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- Game install; override with -p:GameDir=... -->
+    <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Shadows of Doubt</GameDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="$(GameDir)/BepInEx/core/BepInEx.Core.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/core/BepInEx.Unity.IL2CPP.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/core/Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/core/0Harmony.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/Assembly-CSharp.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/Il2Cppmscorlib.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/Il2CppSystem.Core.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.JSONSerializeModule.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.PhysicsModule.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.AnimationModule.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.InputLegacyModule.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.UI.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.AudioModule.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="$(GameDir)/BepInEx/interop/com.rlabrecque.steamworks.net.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="CopyToPlugins" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)/BepInEx/plugins" />
+  </Target>
+
+</Project>

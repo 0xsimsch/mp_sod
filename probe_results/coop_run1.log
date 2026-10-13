@@ -1,0 +1,12 @@
+22:56:14.036 SoD Co-op loaded (MaxPlayers=2)
+22:56:56.071 registered local player as P0 (host)
+22:58:25.026 P1 "Ghost" possessed citizen 2 "Odion Sarr"
+22:58:25.032 TRESPASS body=P1 "Ghost" room=17 result=False escalation=0
+22:58:25.033 F5: P1 "Ghost" added as ghost (replays your movement 3s behind)
+22:59:31.989 TRESPASS body=P1 "Ghost" room=1209 result=True escalation=2
+22:59:31.990 F7: P1 "Ghost" placed in home of citizen 4 "Jiyoo Ryu" room=1209; watching for SEES-ILLEGAL / PURSUED-BY / TRESPASS
+23:00:10.736 TRESPASS body=P1 "Ghost" room=2378 result=False escalation=0
+23:01:02.623 TRESPASS body=P1 "Ghost" room=1584 result=True escalation=1
+23:01:02.623 TRESPASS body=P1 "Ghost" room=1586 result=False escalation=0
+23:01:02.623 TRESPASS body=P1 "Ghost" room=2084 result=True escalation=1
+23:01:02.623 TRESPASS body=P1 "Ghost" room=2190 result=False escalation=0
