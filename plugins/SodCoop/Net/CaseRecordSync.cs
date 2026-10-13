@@ -131,6 +131,7 @@ public static class CaseRecordSync
         {
             var c = JsonUtility.FromJson(json, Il2CppType.Of<Case>())?.TryCast<Case>();
             if (c == null) { Plugin.Event("CASE record: JsonUtility returned nothing"); return; }
+            if (IsHost && MergeBoardEdit(panel, c)) { Applied++; return; }
             SetupObjectives(c, c.currentActiveObjectives);
             SetupObjectives(c, c.inactiveCurrentObjectives);
             SetupObjectives(c, c.endedObjectives);
@@ -141,6 +142,7 @@ public static class CaseRecordSync
                 var old = panel.activeCases[i];
                 if (old == null || old.id != c.id) continue;
                 wasActive |= panel.activeCase != null && panel.activeCase.Pointer == old.Pointer;
+                RetireObjectives(old);
                 panel.activeCases.RemoveAt(i);
             }
             panel.activeCases.Add(c);
@@ -155,6 +157,52 @@ public static class CaseRecordSync
         }
         catch (Exception e) { Plugin.Event($"CASE record failed: {e}"); }
         finally { _applying = false; }
+    }
+
+    /// <summary>
+    /// Host, a client's board edit: take only the board (pins and their positions/colours, string colours, hidden
+    /// connections, the name) into the host's own case. Replacing the whole case rebuilt the host's live objectives
+    /// from the client's copy on every pin.
+    /// </summary>
+    static bool MergeBoardEdit(CasePanelController panel, Case incoming)
+    {
+        Case mine = null;
+        for (int i = 0; i < panel.activeCases.Count; i++)
+            if (panel.activeCases[i] != null && panel.activeCases[i].id == incoming.id) { mine = panel.activeCases[i]; break; }
+        if (mine == null) return false; // a case the client made itself: add it whole
+        mine.caseElements = incoming.caseElements;
+        mine.stringColours = incoming.stringColours;
+        mine.hiddenConnections = incoming.hiddenConnections;
+        if (!string.IsNullOrEmpty(incoming.name)) mine.name = incoming.name;
+        if (panel.activeCase != null && panel.activeCase.Pointer == mine.Pointer)
+        {
+            panel.SetActiveCase(mine); // rebuild the board from the merged elements
+            panel.UpdateStrings();
+        }
+        Plugin.Event($"CASE board edit for {mine.id} \"{mine.name}\" merged: {mine.caseElements?.Count ?? 0} pins");
+        return true;
+    }
+
+    /// <summary>
+    /// Take the replaced copy's objectives down quietly (UI entry, pointer, checking loop) before the new copy's are set
+    /// up. Left behind, they were completed/cancelled as orphans and those completions reached the host.
+    /// </summary>
+    static void RetireObjectives(Case old)
+    {
+        ObjectiveSync.Retiring = true;
+        try
+        {
+            foreach (var list in new[] { old.currentActiveObjectives, old.inactiveCurrentObjectives })
+            {
+                if (list == null) continue;
+                foreach (var o in list.ToArray())
+                {
+                    if (o == null || o.isComplete || o.isCancelled) continue;
+                    try { o.Remove(); } catch (Exception e) { Plugin.Event($"CASE could not retire objective '{o.name}': {e.Message}"); }
+                }
+            }
+        }
+        finally { ObjectiveSync.Retiring = false; }
     }
 
     static void SetupObjectives(Case c, Il2CppSystem.Collections.Generic.List<Objective> list)

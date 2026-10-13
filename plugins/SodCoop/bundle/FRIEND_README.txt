@@ -14,7 +14,7 @@ Install
        WINEDLLOVERRIDES="winhttp=n,b" %command%
    (Windows: nothing to do.)
 4. Start the game. The FIRST start takes a few minutes longer with a black or frozen window: BepInEx generates
-   its files for this game version (BepInEx/interop). Let it finish. When the mod is loaded, BepInEx/sodcoop.log exists and starts with "SoD Co-op 0.9.2 loaded".
+   its files for this game version (BepInEx/interop). Let it finish. When the mod is loaded, BepInEx/sodcoop.log exists and starts with "SoD Co-op 0.9.3 loaded".
 
 Join the host
 -------------

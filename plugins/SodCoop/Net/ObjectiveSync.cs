@@ -160,6 +160,18 @@ public static class ObjectiveSync
         return null;
     }
 
+    /// <summary>Set by CaseRecordSync while it removes the objectives of a case copy it replaces.</summary>
+    internal static bool Retiring;
+
+    static bool IsCurrentCase(Case c)
+    {
+        var cases = CasePanelController.Instance?.activeCases;
+        if (cases == null) return false;
+        for (int i = 0; i < cases.Count; i++)
+            if (cases[i] != null && cases[i].Pointer == c.Pointer) return true;
+        return false;
+    }
+
     // ------------------------------------------------------------------ patches
 
     [HarmonyPatch(typeof(Objective), nameof(Objective.Complete))]
@@ -167,9 +179,14 @@ public static class ObjectiveSync
     {
         static bool Prefix(Objective __instance)
         {
+            if (Retiring) return false; // an old copy being taken down: no completion, no effects, nothing sent
             if (!IsClient || _applying || !World.Ready) return true;
             var c = __instance.thisCase;
             if (c == null) return true; // not part of a case (tutorial etc.): local
+            // Only objectives of the case copy we currently show. An objective of a replaced copy (every host
+            // re-send builds a new one) is an orphan; forwarding it completed the host's real objective (seen: the
+            // crime-scene objective completed 1 s after the murder case arrived, so its location vanished).
+            if (!IsCurrentCase(c)) return false;
             var key = (c.id, __instance.name);
             float now = Time.unscaledTime;
             if (_requested.TryGetValue(key, out var at) && now - at < RequestRepeat) return false;

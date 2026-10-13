@@ -38,6 +38,7 @@ public static class CaseSync
     static readonly List<(CaseEventMsg msg, float at)> _pending = new();
     const float PendingMaxAge = 600f;
     const int PendingMax = 2000;
+    static readonly HashSet<string> _unknownLogged = new();
 
     public static void Apply(CaseEventMsg m)
     {
@@ -50,6 +51,9 @@ public static class CaseSync
         }
         Unknown++;
         if (_pending.Count < PendingMax) _pending.Add((m, UnityEngine.Time.unscaledTime));
+        // Diagnostics: which evidence/facts don't exist here (case files "not updated on pickup").
+        if (_unknownLogged.Count < 30 && _unknownLogged.Add(m.Id))
+            Plugin.Event($"CASE waiting: {m.Kind} for '{m.Id}' (from P{m.ByPlayer}) doesn't exist here yet");
     }
 
     // "X found new evidence" fired up to 16 times in a few minutes: group it, at most once per 15 s per player.
@@ -63,8 +67,16 @@ public static class CaseSync
     }
 
     /// <summary>Per frame: show grouped evidence notices.</summary>
+    static float _nextRetry;
+
     public static void FlushNotices()
     {
+        // Also retry waiting events now and then: an item's evidence can become creatable once its room loads here.
+        if (_pending.Count > 0 && UnityEngine.Time.unscaledTime >= _nextRetry)
+        {
+            _nextRetry = UnityEngine.Time.unscaledTime + 5f;
+            RetryPending();
+        }
         if (_evidenceNotices.Count == 0) return;
         float now = UnityEngine.Time.unscaledTime;
         foreach (var by in new List<byte>(_evidenceNotices.Keys))
@@ -131,7 +143,18 @@ public static class CaseSync
     internal static Evidence CreateOnDemand(string id)
     {
         if (id.StartsWith(NoteSync.StickyNotePrefix)) return NoteSync.CreateStickyNote(id);
-        if (!id.StartsWith("time|")) return null;
+        if (!id.StartsWith("time|"))
+        {
+            // Item evidence ("I<interactable id>", dates…) is created lazily, when someone first inspects the item:
+            // the host's player read a case file, ours never did, so every update for it waited forever. The game's
+            // own lookup creates it on demand from the id.
+            try
+            {
+                if (Toolbox.Instance != null && Toolbox.Instance.TryGetEvidence(id, out var made) && made != null) { CreatedOnDemand++; return made; }
+            }
+            catch (Exception e) { Plugin.Event($"CASE could not create evidence '{id}': {e.Message}"); }
+            return null;
+        }
         var t = EvidenceCreator.Instance?.GetTimeEvidence(id);
         if (t != null) CreatedOnDemand++;
         return t;
