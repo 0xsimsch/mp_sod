@@ -13,7 +13,7 @@ import sys
 import time
 
 MAGIC = 0x4D53
-HELLO, WELCOME, REJECT, POSE, ILLEGAL, DAMAGE, TIMESYNC, NPCS, BYE, DEATH, MURDER, CASEREC, SNAP, TALKREQ, TALKREPLY, TALKEND = 1, 2, 3, 10, 11, 12, 14, 19, 20, 22, 23, 24, 25, 26, 27, 28  # protocol v32 (SodCoop 0.8.x)
+HELLO, WELCOME, REJECT, POSE, ILLEGAL, DAMAGE, TIMESYNC, NPCS, BYE, DEATH, MURDER, CASEREC, SNAP, TALKREQ, TALKREPLY, TALKEND = 1, 2, 3, 10, 11, 12, 14, 19, 20, 22, 23, 24, 25, 26, 27, 28  # protocol v36 (SodCoop 0.9.4)
 
 
 def s8(text):
@@ -101,7 +101,7 @@ def main():
             seq = (seq + 1) & 0xFFFF
             ang = now * 0.5
             x, z = client_pos[0] + 3 * math.cos(ang), client_pos[2] + 3 * math.sin(ang)
-            sock.sendto(msg(POSE, struct.pack("<BHffffffBfiB", 0, seq, now, x, client_pos[1], z, 0.0, 0.0, 4, 0.0, -1, 0)), client)
+            sock.sendto(msg(POSE, struct.pack("<BHffffffBfiBB", 0, seq, now, x, client_pos[1], z, 0.0, 0.0, 4, 0.0, -1, 0, 0)), client)
 
         if client and client_pos and damage_after is not None and not damage_sent and now >= damage_after:
             damage_sent = True

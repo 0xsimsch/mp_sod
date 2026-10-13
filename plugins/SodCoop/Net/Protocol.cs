@@ -149,6 +149,10 @@ public enum PoseFlags : byte
     PlayerInVent = 32,
     /// <summary>Players only: flashlight on.</summary>
     PlayerFlashlight = 64,
+    /// <summary>Players only: sitting (locked into a seat, eyes lowered).</summary>
+    PlayerSitting = 8,
+    /// <summary>Players only: lying down (bed).</summary>
+    PlayerLying = 128,
 }
 
 public struct PoseMsg
@@ -168,6 +172,20 @@ public struct PoseMsg
     /// <summary>World interactable in the player's hand or carried, -1 if none.</summary>
     public int HeldId;
     public HeldKind Held;
+    /// <summary>What the player is doing with its hands/body (shown with the nearest citizen animation).</summary>
+    public PlayerActivity Activity;
+}
+
+public enum PlayerActivity : byte
+{
+    None = 0,
+    Lockpicking = 1,
+    Typing = 2,
+    Phone = 3,
+    Consuming = 4,
+    Smoking = 5,
+    Reading = 6,
+    Searching = 7,
 }
 
 public enum HeldKind : byte
@@ -361,7 +379,7 @@ public struct ForensicMsg
 public static class Protocol
 {
     /// <summary>Bump on any wire change. Hosts reject other versions in the handshake.</summary>
-    public const ushort Version = 35;
+    public const ushort Version = 36;
     const ushort Magic = 0x4D53; // "SM"
 
     public static byte[] Hello(HelloMsg m) => Write(MsgType.Hello, w =>
@@ -384,7 +402,7 @@ public static class Protocol
         {
             w.Write(copy.PlayerId); w.Write(copy.Seq); w.Write(copy.Time);
             V(w, copy.Position); w.Write(copy.Yaw); w.Write(copy.Pitch); w.Write((byte)copy.Flags);
-            w.Write(copy.LookYaw); w.Write(copy.HeldId); w.Write((byte)copy.Held);
+            w.Write(copy.LookYaw); w.Write(copy.HeldId); w.Write((byte)copy.Held); w.Write((byte)copy.Activity);
         });
     }
 
@@ -646,7 +664,7 @@ public static class Protocol
     {
         PlayerId = r.ReadByte(), Seq = r.ReadUInt16(), Time = r.ReadSingle(), Position = V(r),
         Yaw = r.ReadSingle(), Pitch = r.ReadSingle(), Flags = (PoseFlags)r.ReadByte(),
-        LookYaw = r.ReadSingle(), HeldId = r.ReadInt32(), Held = (HeldKind)r.ReadByte(),
+        LookYaw = r.ReadSingle(), HeldId = r.ReadInt32(), Held = (HeldKind)r.ReadByte(), Activity = (PlayerActivity)r.ReadByte(),
     });
 
     public static IllegalActionMsg ReadIllegalAction(byte[] d) => Read(d, r => new IllegalActionMsg

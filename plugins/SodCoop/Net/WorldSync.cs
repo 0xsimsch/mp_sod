@@ -27,6 +27,8 @@ public enum WorldEventKind : byte
     Alarm = 7,
     /// <summary>Interactable.SetExtraStateValue on a breaker. I0 = interactable id, F0 = value.</summary>
     Breaker = 8,
+    /// <summary>Client → host: the client's own player set off an alarm. B1 = is address (else building), I0 = id, I2 = floor (-999 none).</summary>
+    AlarmRequest = 9,
 }
 
 public struct WorldEventMsg
@@ -234,6 +236,10 @@ public static class WorldSync
                     break;
                 }
                 case WorldEventKind.Alarm: ApplyAlarm(m); break;
+                case WorldEventKind.AlarmRequest when IsHost:
+                    _applying = false; // the host raises it for real: its postfix broadcasts the state to everyone
+                    RaiseForClient(m);
+                    break;
                 case WorldEventKind.Breaker:
                 {
                     var it = FindInteractable(m.I0);
@@ -404,10 +410,57 @@ public static class WorldSync
     /// <summary>Clients don't raise alarms or change security targets themselves: the host's systems decide.</summary>
     static bool HostDecides() => _applying || !IsClient || !World.Ready;
 
+    /// <summary>
+    /// Client: an alarm the game raises because of OUR player (a camera saw us, we broke in) is asked of the host,
+    /// which raises it with our body as the target. Before, clients' alarms were simply dropped and the host's own
+    /// systems never noticed the client ("only the host can trigger alarms").
+    /// </summary>
+    static bool ForwardOwnAlarm(bool newVal, Human target, bool isAddress, int id, int floor, Func<bool> playerIsThere)
+    {
+        if (!newVal || _applying || !IsClient || !World.Ready) return false;
+        var me = Player.Instance;
+        if (me == null) return false;
+        bool ours = target != null ? target.Pointer == me.Pointer : playerIsThere();
+        if (!ours) return false;
+        Session?.SendWorld(WorldProtocol.Write(new WorldEventMsg
+        {
+            Kind = WorldEventKind.AlarmRequest, ByPlayer = PlayerRegistry.Local?.Id.Value ?? NoPlayer, B1 = isAddress, I0 = id, I2 = floor,
+        }));
+        Sent++;
+        Plugin.Event($"WORLD our player set off the {(isAddress ? "address" : "building")} {id} alarm: asking the host to raise it");
+        return true;
+    }
+
+    /// <summary>Host: raise a client's alarm with that client's body as the target.</summary>
+    static void RaiseForClient(WorldEventMsg m)
+    {
+        var body = PlayerRegistry.TryGet(new PlayerId(m.ByPlayer), out var p) ? p.Body : null;
+        if (m.B1)
+        {
+            if (CityData.Instance?.addressDictionary != null && CityData.Instance.addressDictionary.TryGetValue(m.I0, out var a) && a != null && !a.alarmActive)
+                a.SetAlarm(true, body);
+        }
+        else
+        {
+            var b = Building(m.I0);
+            if (b == null || b.alarmActive) return;
+            NewFloor floor = null;
+            if (m.I2 != -999 && b.floors != null) b.floors.TryGetValue(m.I2, out floor);
+            b.SetAlarm(true, body, floor);
+        }
+        Plugin.Event($"WORLD P{m.ByPlayer} set off the {(m.B1 ? "address" : "building")} {m.I0} alarm: raised here");
+    }
+
     [HarmonyPatch(typeof(NewBuilding), nameof(NewBuilding.SetAlarm))]
     static class BuildingAlarm
     {
-        static bool Prefix() => HostDecides();
+        static bool Prefix(NewBuilding __instance, bool newVal, Human target, NewFloor forFloor)
+        {
+            var me = Player.Instance;
+            if (ForwardOwnAlarm(newVal, target, false, __instance.buildingID, forFloor != null ? forFloor.floor : -999,
+                    () => me != null && me.currentBuilding != null && me.currentBuilding.Pointer == __instance.Pointer)) return false;
+            return HostDecides();
+        }
         static void Postfix(NewBuilding __instance, NewFloor forFloor) =>
             SendAlarm(false, __instance.buildingID, __instance.alarmActive, __instance.targetMode, __instance.alarmTimer, forFloor != null ? forFloor.floor : -999);
     }
@@ -423,7 +476,13 @@ public static class WorldSync
     [HarmonyPatch(typeof(NewAddress), nameof(NewAddress.SetAlarm))]
     static class AddressAlarm
     {
-        static bool Prefix() => HostDecides();
+        static bool Prefix(NewAddress __instance, bool newVal, Human target)
+        {
+            var me = Player.Instance;
+            if (ForwardOwnAlarm(newVal, target, true, __instance.id, -999,
+                    () => me != null && me.currentGameLocation != null && me.currentGameLocation.Pointer == __instance.Pointer)) return false;
+            return HostDecides();
+        }
         static void Postfix(NewAddress __instance) =>
             SendAlarm(true, __instance.id, __instance.alarmActive, __instance.targetMode, __instance.alarmTimer, -999);
     }
@@ -441,7 +500,13 @@ public static class WorldSync
     /// client's body; the resulting alarm comes over as <see cref="WorldEventKind.Alarm"/>, sentry hits as forwarded damage.
     /// </summary>
     [HarmonyPatch(typeof(SecuritySystem), nameof(SecuritySystem.OnInvestigate))]
-    static class Cameras { static bool Prefix() => HostDecides(); }
+    static class Cameras
+    {
+        // A client's cameras may react to that client's own player (the host's never see it reliably); the alarm they
+        // raise goes to the host through ForwardOwnAlarm. Everything else stays the host's.
+        static bool Prefix(Actor newTarget) =>
+            HostDecides() || (newTarget != null && Player.Instance != null && newTarget.Pointer == Player.Instance.Pointer);
+    }
 
     // ------------------------------------------------------------------ windows (item 11)
 

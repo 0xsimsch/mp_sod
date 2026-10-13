@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.3";
+    public const string ModVersion = "0.9.4";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -445,6 +445,8 @@ public sealed class NetSession : IDisposable
         if (p.inAirVent) msg.Flags |= PoseFlags.PlayerInVent;
         var items = FirstPersonItemController.Instance;
         if (items != null && items.flashlight) msg.Flags |= PoseFlags.PlayerFlashlight;
+        msg.Flags |= SeatedFlags(p, msg.Position.Y);
+        msg.Activity = ActivityOf(p);
         var cam = p.cam != null && p.cam.cam != null ? p.cam.cam.transform : Camera.main != null ? Camera.main.transform : null;
         if (cam != null)
         {
@@ -488,6 +490,47 @@ public sealed class NetSession : IDisposable
         }
         pos.y = feet;
         return pos;
+    }
+
+    /// <summary>
+    /// Sitting or lying: the player is locked into a furniture interaction (chair, sofa, bed) and its eyes are lowered.
+    /// The game has no "sitting" flag for the player; it's a locked-in interaction plus a camera transition.
+    /// </summary>
+    static PoseFlags SeatedFlags(Player p, float feetY)
+    {
+        try
+        {
+            var ic = InteractionController.Instance;
+            if (ic == null || ic.lockedInInteraction == null || p.isCrouched) return 0;
+            var cam = p.cam != null && p.cam.cam != null ? p.cam.cam.transform : null;
+            if (cam == null) return 0;
+            float eyes = cam.position.y - feetY;
+            if (eyes < 0.7f) return PoseFlags.PlayerLying;
+            if (eyes < 1.35f) return PoseFlags.PlayerSitting;
+        }
+        catch { /* best effort */ }
+        return 0;
+    }
+
+    /// <summary>What the local player is doing, for the partner's view (first match wins).</summary>
+    static PlayerActivity ActivityOf(Player p)
+    {
+        try
+        {
+            var items = FirstPersonItemController.Instance;
+            var ic = InteractionController.Instance;
+            if (p.activeCall != null) return PlayerActivity.Phone;
+            var locked = ic != null ? ic.lockedInInteraction : null;
+            string lockedName = locked?.preset != null ? locked.preset.name : "";
+            if (lockedName.Contains("Computer") || lockedName.Contains("Cruncher") || lockedName.Contains("Terminal")) return PlayerActivity.Typing;
+            if (p.isLockpicking) return PlayerActivity.Lockpicking;
+            if (items != null && items.isConsuming) return PlayerActivity.Consuming;
+            if (items != null && items.smokingTokeActive) return PlayerActivity.Smoking;
+            if (ic != null && ic.readingMode) return PlayerActivity.Reading;
+            if (p.illegalActionActive) return PlayerActivity.Searching;
+        }
+        catch { /* best effort */ }
+        return PlayerActivity.None;
     }
 
     /// <summary>What the local player has in their hands: a carried physics object, or the drawn inventory item.</summary>
@@ -750,6 +793,7 @@ public sealed class NetSession : IDisposable
 
         player?.RemoteBody?.SetLookAndHeld(m.Pitch, m.LookYaw, m.HeldId, m.Held);
         player?.RemoteBody?.SetPlayerFlags(m.Flags);
+        player?.RemoteBody?.SetActivity(m.Activity);
         if (player?.RemoteBody?.PoseSource is NetworkPoseSource src)
             src.Push(new PlayerPose
             {

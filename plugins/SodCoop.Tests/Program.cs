@@ -40,7 +40,7 @@ static class Program
         var poseBytes = Protocol.Pose(poseIn);
         var p = Protocol.ReadPose(poseBytes);
         Check(p.PlayerId == 1 && p.Seq == 65535 && p.Time == 12.5f && p.Position.Y == 2 && p.Yaw == 270f && p.Flags == (PoseFlags.Running | PoseFlags.Moving), "Pose round trip");
-        Check(poseBytes.Length == 3 + 1 + 2 + 4 + 12 + 4 + 4 + 1 + 4 + 4 + 1, $"Pose size is 40 bytes (got {poseBytes.Length})");
+        Check(poseBytes.Length == 3 + 1 + 2 + 4 + 12 + 4 + 4 + 1 + 4 + 4 + 1 + 1, $"Pose size is 41 bytes (got {poseBytes.Length})");
 
         var d = Protocol.ReadDamage(Protocol.Damage(new DamageMsg { PlayerId = 1, Amount = 0.2f, AttackerHumanId = 237, Position = new Vec3(4, 5, 6), Direction = new Vec3(0, 0, 1) }));
         Check(d.AttackerHumanId == 237 && d.Amount == 0.2f && d.Direction.Z == 1, "Damage round trip");

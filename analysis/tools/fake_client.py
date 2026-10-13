@@ -12,7 +12,7 @@ import sys
 import time
 
 MAGIC = 0x4D53
-VERSION = 32  # SodCoop 0.8.x
+VERSION = 36  # SodCoop 0.9.4
 HELLO, WELCOME, REJECT, POSE, ILLEGAL, DAMAGE, DOOR, KO, CASE, SPAWN, ITEM, NPCS, TIMESYNC, BYE, PING, LEFT, DEATH, MURDER, CASEREC, SNAP, TALKREQ, TALKREPLY, TALKEND, FORENSIC = 1, 2, 3, 10, 11, 12, 13, 15, 16, 17, 18, 19, 14, 20, 30, 21, 22, 23, 24, 25, 26, 27, 28, 29
 
 
@@ -99,7 +99,7 @@ def main():
                 print(f"[{now:6.2f}] REJECT {reason}", flush=True)
                 return 1
             elif t == POSE:
-                pid, _seq, _t, x, y, z, yaw, _pitch, _flags, _look_yaw, _held_id, _held = struct.unpack_from("<BHffffffBfiB", data, 3)
+                pid, _seq, _t, x, y, z, yaw, _pitch, _flags, _look_yaw, _held_id, _held, _activity = struct.unpack_from("<BHffffffBfiBB", data, 3)
                 if pid == 0:
                     host_pos = (x, y, z)
                     host_poses += 1
@@ -193,7 +193,7 @@ def main():
             z = host_pos[2] + 2.5 * math.sin(ang)
             yaw = (math.degrees(math.atan2(-math.sin(ang), math.cos(ang))) + 360) % 360
             # pose v25+: ... flags, look yaw, held interactable id (-1), held kind (0)
-            sock.sendto(msg(POSE, struct.pack("<BHffffffBfiB", my_id, seq, now, x, host_pos[1], z, yaw, 0.0, 4, yaw, -1, 0)), addr)
+            sock.sendto(msg(POSE, struct.pack("<BHffffffBfiBB", my_id, seq, now, x, host_pos[1], z, yaw, 0.0, 4, yaw, -1, 0, 0)), addr)
 
         if my_id is not None and illegal_after is not None and not sent_illegal and now >= illegal_after:
             sent_illegal = True

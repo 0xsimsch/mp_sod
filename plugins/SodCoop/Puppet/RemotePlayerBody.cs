@@ -129,6 +129,72 @@ public sealed class RemotePlayerBody
             KeepShown();
         }
         _flashlightOn = (f & Net.PoseFlags.PlayerFlashlight) != 0;
+        _sitting = (f & Net.PoseFlags.PlayerSitting) != 0;
+        _lying = (f & Net.PoseFlags.PlayerLying) != 0;
+    }
+
+    bool _sitting, _lying, _sitShown, _lieShown;
+    Net.PlayerActivity _activity;
+    CitizenAnimationController.ArmsBoolSate _armsShown = (CitizenAnimationController.ArmsBoolSate)255;
+    bool _phoneShown;
+
+    public void SetActivity(Net.PlayerActivity a) => _activity = a;
+
+    /// <summary>Arms and idle for what the partner is doing (activity first, else what's in their hands).</summary>
+    void UpdateActivity()
+    {
+        var anim = Human.animationController;
+        if (anim == null) return;
+        var arms = _activity switch
+        {
+            Net.PlayerActivity.Lockpicking => CitizenAnimationController.ArmsBoolSate.armsLocking,
+            Net.PlayerActivity.Typing => CitizenAnimationController.ArmsBoolSate.armsTyping,
+            Net.PlayerActivity.Consuming => CitizenAnimationController.ArmsBoolSate.armsConsuming,
+            Net.PlayerActivity.Smoking => CitizenAnimationController.ArmsBoolSate.armsSmoking,
+            Net.PlayerActivity.Reading => CitizenAnimationController.ArmsBoolSate.armsReading,
+            Net.PlayerActivity.Searching => CitizenAnimationController.ArmsBoolSate.armsUse,
+            _ => _held is Net.HeldKind.Item or Net.HeldKind.Raised ? CitizenAnimationController.ArmsBoolSate.armsUse : CitizenAnimationController.ArmsBoolSate.none,
+        };
+        if (arms != _armsShown) { anim.SetArmsBoolState(arms); _armsShown = arms; }
+        // The phone is an idle pose; sitting/lying/kneeling own the idle state while they're shown.
+        bool phone = _activity == Net.PlayerActivity.Phone && !_sitShown && !_lieShown && !_crouchIdleShown;
+        if (phone != _phoneShown)
+        {
+            anim.SetIdleAnimationState(phone ? CitizenAnimationController.IdleAnimationState.telephone : CitizenAnimationController.IdleAnimationState.none);
+            _phoneShown = phone;
+        }
+    }
+
+    /// <summary>The partner sits or lies down: the game's citizen sitting idle / in-bed pose (applied in LateApply).</summary>
+    void UpdateSeated()
+    {
+        var anim = Human.animationController;
+        if (anim == null) return;
+        bool sit = _sitting && !Hidden, lie = _lying && !Hidden;
+        if (sit != _sitShown)
+        {
+            anim.SetIdleAnimationState(sit ? CitizenAnimationController.IdleAnimationState.sitting : CitizenAnimationController.IdleAnimationState.none);
+            _sitShown = sit;
+            _crouchIdleShown = false; // the crouch kneel and the seat share the idle state
+        }
+        if (lie != _lieShown)
+        {
+            Human.isInBed = lie;
+            anim.SetInBed(lie, false, false, false);
+            _lieShown = lie;
+        }
+    }
+
+    void ResetSeated()
+    {
+        if (Human == null || Human.WasCollected) return;
+        var anim = Human.animationController;
+        if (_phoneShown) anim?.SetIdleAnimationState(CitizenAnimationController.IdleAnimationState.none);
+        _phoneShown = false;
+        if (_armsShown != (CitizenAnimationController.ArmsBoolSate)255) anim?.SetArmsBoolState(CitizenAnimationController.ArmsBoolSate.none);
+        if (_sitShown) anim?.SetIdleAnimationState(CitizenAnimationController.IdleAnimationState.none);
+        if (_lieShown) { Human.isInBed = false; anim?.SetInBed(false, false, false, true); }
+        _sitShown = _lieShown = false;
     }
 
     /// <summary>The partner's flashlight: a copy of the game's own first-person flashlight light (HDRP light setup included).</summary>
@@ -184,7 +250,9 @@ public sealed class RemotePlayerBody
                 }
             }
             UpdateFlashlight();
-            UpdateCrouch();
+            if (_sitting || _lying || _sitShown || _lieShown) UpdateSeated();
+            if (!_sitShown && !_lieShown) UpdateCrouch();
+            UpdateActivity();
             if (_held == Net.HeldKind.Carried && _heldId >= 0 && !_heldWasThrown &&
                 CityData.Instance.savableInteractableDictionary.TryGetValue(_heldId, out var carried) && carried?.controller != null)
             {
@@ -238,9 +306,8 @@ public sealed class RemotePlayerBody
             {
                 anim.SetCarryingItem(kind == Net.HeldKind.Carried);
                 if (kind == Net.HeldKind.Carried) anim.SetCarryItemType(1);
-                anim.SetArmsBoolState(kind is Net.HeldKind.Item or Net.HeldKind.Raised
-                    ? CitizenAnimationController.ArmsBoolSate.armsUse : CitizenAnimationController.ArmsBoolSate.none);
             }
+            _armsShown = (CitizenAnimationController.ArmsBoolSate)255; // re-evaluate the arms (held item vs activity)
         }
         catch (System.Exception e) { Plugin.Event($"held item for {Owner} failed: {e.Message}"); }
     }
@@ -281,6 +348,7 @@ public sealed class RemotePlayerBody
 
     public void Release()
     {
+        ResetSeated();
         ResetCrouch();
         SetHeld(-1, Net.HeldKind.None);
         if (_flashlight != null) { Object.Destroy(_flashlight); _flashlight = null; }

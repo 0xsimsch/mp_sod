@@ -46,9 +46,19 @@ public static class ElevatorSync
     static Elevator Find(int id)
     {
         var list = SessionData.Instance?.activeElevators;
-        if (list == null) return null;
-        for (int i = 0; i < list.Count; i++)
-            if (list[i] != null && IdOf(list[i]) == id) return list[i];
+        if (list != null)
+            for (int i = 0; i < list.Count; i++)
+                if (list[i] != null && IdOf(list[i]) == id) return list[i];
+        // Not simulated here right now (the host's player is elsewhere): every elevator also lives in its building.
+        var buildings = HighlanderSingleton<CityBuildings>.Instance?.buildingDirectory;
+        if (buildings == null) return null;
+        for (int b = 0; b < buildings.Count; b++)
+        {
+            var stairs = buildings[b]?.stairwells;
+            if (stairs == null) continue;
+            foreach (var kv in stairs)
+                if (kv.Value != null && IdOf(kv.Value) == id) return kv.Value;
+        }
         return null;
     }
 
@@ -180,17 +190,19 @@ public static class ElevatorSync
     [HarmonyPatch(typeof(Elevator), nameof(Elevator.CallElevator))]
     static class Calls
     {
-        /// <summary>Client: a press next to our player goes to the host; everything else (local citizens) is dropped.</summary>
+        /// <summary>
+        /// Client: a press next to our player runs here right away and goes to the host too (its state corrects ours
+        /// whenever it simulates this elevator). Waiting for the host left the car standing (two-machine test: the
+        /// host didn't have the elevator active and dropped the call). Local citizens' calls are dropped.
+        /// </summary>
         static bool Prefix(Elevator __instance, int newFloor, bool upButton)
         {
             if (!IsClient || _applying || !World.Ready) return true;
-            if (NearLocalPlayer(__instance, newFloor))
-            {
-                Session?.SendWorld(CallMsg(IdOf(__instance), newFloor, upButton));
-                Sent++;
-                Plugin.Event($"LIFT {IdOf(__instance)}: called to floor {newFloor} ({(upButton ? "up" : "down")}); asking the host");
-            }
-            return false;
+            if (!NearLocalPlayer(__instance, newFloor)) return false;
+            Session?.SendWorld(CallMsg(IdOf(__instance), newFloor, upButton));
+            Sent++;
+            Plugin.Event($"LIFT {IdOf(__instance)}: called to floor {newFloor} ({(upButton ? "up" : "down")}); also told the host");
+            return true;
         }
 
         /// <summary>Host: every accepted call (players' and citizens') goes to clients near this elevator.</summary>
