@@ -77,6 +77,11 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.13: board resync after every client edit
+
+- Host: after merging a client's board edit, it sends the merged case to everyone right away (the editor included), so all boards show the host's state and the edit is confirmed. Log: `CASE board edit … merged: N pins; resyncing everyone`.
+- Client: a case record that arrives while the left mouse button is down is held until release (at most 10 s), so the rebuild doesn't cut off a drag. The newest record per case wins.
+
 ## 0.9.12: case board edits survive the host's case updates
 
 - Seen (client log, 0.9.10): the host sent the same 16 KB case three times in 26 s while the client was pinning; each copy rebuilt the client's board, so pins not sent yet (1 s debounce) were lost and drags were cut off.

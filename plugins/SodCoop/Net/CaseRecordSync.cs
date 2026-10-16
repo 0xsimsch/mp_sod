@@ -46,6 +46,7 @@ public static class CaseRecordSync
     /// <summary>Host, per frame: send cases marked dirty once things settle.</summary>
     public static void Flush(float now, Action<string, bool> send)
     {
+        if (!IsHost) ApplyDeferred(now);
         if (_dirty.Count == 0 || now < _flushAt) return;
         var panel = CasePanelController.Instance;
         if (panel?.activeCases != null)
@@ -69,6 +70,7 @@ public static class CaseRecordSync
         _dirty.Clear();
         _lastSent.Clear();
         _lastApplied.Clear();
+        _deferred.Clear();
     }
 
     /// <summary>Host: re-send this case (status/resolution changed).</summary>
@@ -138,10 +140,45 @@ public static class CaseRecordSync
     [HarmonyPatch(typeof(CasePanelController), nameof(CasePanelController.UnPinFromCasePanel))]
     static class Unpin { static void Postfix() => BoardEdited(); }
 
-    public static void Apply(string json, bool active)
+    /// <summary>Client: records held back while the mouse button is down (a board rebuild would cut off a drag).</summary>
+    static readonly Dictionary<int, (string json, bool active, float since)> _deferred = new();
+    const float MaxDefer = 10f;
+
+    static bool Dragging()
+    {
+        try { return Input.GetMouseButton(0); } catch { return false; }
+    }
+
+    /// <summary>Client, per frame: apply held-back records once the mouse is released (or after <see cref="MaxDefer"/> s).</summary>
+    static void ApplyDeferred(float now)
+    {
+        if (_deferred.Count == 0) return;
+        bool dragging = Dragging();
+        foreach (var id in new List<int>(_deferred.Keys))
+        {
+            var (json, active, since) = _deferred[id];
+            if (dragging && now - since < MaxDefer) continue;
+            _deferred.Remove(id);
+            Apply(json, active, fromQueue: true);
+        }
+    }
+
+    public static void Apply(string json, bool active) => Apply(json, active, false);
+
+    static void Apply(string json, bool active, bool fromQueue)
     {
         var panel = CasePanelController.Instance;
         if (panel?.activeCases == null) return;
+        if (!IsHost && !fromQueue && Dragging())
+        {
+            int id = PeekId(json);
+            if (id >= 0)
+            {
+                float since = _deferred.TryGetValue(id, out var d) ? d.since : Time.unscaledTime;
+                _deferred[id] = (json, active || (_deferred.TryGetValue(id, out var d2) && d2.active), since); // newest record wins
+                return;
+            }
+        }
         _applying = true;
         try
         {
@@ -178,6 +215,17 @@ public static class CaseRecordSync
         finally { _applying = false; }
     }
 
+    /// <summary>The case id from a record without parsing the whole case ("id":N in the JSON); -1 if not found.</summary>
+    static int PeekId(string json)
+    {
+        int i = json.IndexOf("\"id\":", StringComparison.Ordinal);
+        if (i < 0) return -1;
+        i += 5;
+        int j = i;
+        while (j < json.Length && (char.IsDigit(json[j]) || json[j] == '-')) j++;
+        return int.TryParse(json.AsSpan(i, j - i), out var id) ? id : -1;
+    }
+
     /// <summary>
     /// Client: a host record arrived while our own board edit is still waiting to be sent. Keep our board on the new
     /// copy (it stays dirty, so it goes to the host next and the host merges it).
@@ -210,7 +258,11 @@ public static class CaseRecordSync
             panel.SetActiveCase(mine); // rebuild the board from the merged elements
             panel.UpdateStrings();
         }
-        Plugin.Event($"CASE board edit for {mine.id} \"{mine.name}\" merged: {mine.caseElements?.Count ?? 0} pins");
+        // Resync: the merged case goes straight back to everyone (the editor included), so every board shows the
+        // host's state and the editor sees its edit confirmed. MarkDirty is off while applying, so set it directly.
+        _dirty.Add(mine.id);
+        _flushAt = Time.unscaledTime;
+        Plugin.Event($"CASE board edit for {mine.id} \"{mine.name}\" merged: {mine.caseElements?.Count ?? 0} pins; resyncing everyone");
         return true;
     }
 
