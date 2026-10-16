@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.11";
+    public const string ModVersion = "0.9.12";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -135,7 +135,9 @@ public sealed class NetSession : IDisposable
 
     void OnWorldReloaded()
     {
-        if (Current != this || Role != SessionRole.Client) return;
+        if (Current != this) return;
+        CaseRecordSync.Reset();
+        if (Role != SessionRole.Client) return;
         foreach (var id in new List<PlayerId>(_clientBodies)) ForgetStaleBody(id, "the world was reloaded");
         _lastSeq.Clear();
     }
@@ -201,6 +203,7 @@ public sealed class NetSession : IDisposable
     {
         Current?.Dispose();
         DoorSync.Reset();
+        CaseRecordSync.Reset();
         Current = s;
         Plugin.Event($"NET {s.Role} session started on {s._transport.Name} (protocol v{Protocol.Version})");
         return s;
@@ -238,6 +241,7 @@ public sealed class NetSession : IDisposable
         Puppet.NpcPuppets.ReleaseAll();
         DoorSync.Reset();
         TalkSync.Reset();
+        CaseRecordSync.Reset();
         if (ReferenceEquals(Current, this)) Current = null;
         Plugin.Event($"NET session closed (in {PacketsIn}, out {PacketsOut})");
     }
@@ -1115,6 +1119,7 @@ public sealed class NetSession : IDisposable
         foreach (var id in new List<PlayerId>(_clientBodies)) DropRemoteBody(id, "loading the host's world");
         Puppet.NpcPuppets.ReleaseAll();
         DoorSync.Reset();
+        CaseRecordSync.Reset();
         _spawnRetryAt.Clear();
     }
 

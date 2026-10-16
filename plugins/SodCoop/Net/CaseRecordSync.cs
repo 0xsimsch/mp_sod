@@ -20,6 +20,10 @@ public static class CaseRecordSync
     [ThreadStatic] static bool _applying;
     static readonly HashSet<int> _dirty = new();
     static float _flushAt;
+    /// <summary>Last record sent / applied per case id: an unchanged case isn't sent or rebuilt again. Each rebuild
+    /// replaces the board under the player's hands (seen: the same 16 KB case three times in 26 s while the client
+    /// was pinning, and the client's unsent pins were lost).</summary>
+    static readonly Dictionary<int, string> _lastSent = new(), _lastApplied = new();
 
     public static int Sent { get; private set; }
     public static int Applied { get; private set; }
@@ -49,10 +53,22 @@ public static class CaseRecordSync
             {
                 var c = panel.activeCases[i];
                 if (c == null || !_dirty.Contains(c.id)) continue;
-                send(JsonUtility.ToJson(c), panel.activeCase != null && panel.activeCase.id == c.id);
+                var json = JsonUtility.ToJson(c);
+                if (_lastSent.TryGetValue(c.id, out var last) && last == json) continue;
+                _lastSent[c.id] = json;
+                send(json, panel.activeCase != null && panel.activeCase.id == c.id);
                 Sent++;
+                if (!IsHost) Plugin.Event($"CASE board edit for {c.id} \"{c.name}\" sent: {c.caseElements?.Count ?? 0} pins");
             }
         _dirty.Clear();
+    }
+
+    /// <summary>New session or a reloaded world: the case objects are new, so nothing counts as sent or applied.</summary>
+    public static void Reset()
+    {
+        _dirty.Clear();
+        _lastSent.Clear();
+        _lastApplied.Clear();
     }
 
     /// <summary>Host: re-send this case (status/resolution changed).</summary>
@@ -132,6 +148,8 @@ public static class CaseRecordSync
             var c = JsonUtility.FromJson(json, Il2CppType.Of<Case>())?.TryCast<Case>();
             if (c == null) { Plugin.Event("CASE record: JsonUtility returned nothing"); return; }
             if (IsHost && MergeBoardEdit(panel, c)) { Applied++; return; }
+            if (_lastApplied.TryGetValue(c.id, out var lastJson) && lastJson == json) return; // unchanged: keep the board as it is
+            _lastApplied[c.id] = json;
             SetupObjectives(c, c.currentActiveObjectives);
             SetupObjectives(c, c.inactiveCurrentObjectives);
             SetupObjectives(c, c.endedObjectives);
@@ -142,6 +160,7 @@ public static class CaseRecordSync
                 var old = panel.activeCases[i];
                 if (old == null || old.id != c.id) continue;
                 wasActive |= panel.activeCase != null && panel.activeCase.Pointer == old.Pointer;
+                if (_dirty.Contains(c.id)) KeepLocalBoard(old, c);
                 RetireObjectives(old);
                 panel.activeCases.RemoveAt(i);
             }
@@ -157,6 +176,18 @@ public static class CaseRecordSync
         }
         catch (Exception e) { Plugin.Event($"CASE record failed: {e}"); }
         finally { _applying = false; }
+    }
+
+    /// <summary>
+    /// Client: a host record arrived while our own board edit is still waiting to be sent. Keep our board on the new
+    /// copy (it stays dirty, so it goes to the host next and the host merges it).
+    /// </summary>
+    static void KeepLocalBoard(Case mine, Case incoming)
+    {
+        incoming.caseElements = mine.caseElements;
+        incoming.stringColours = mine.stringColours;
+        incoming.hiddenConnections = mine.hiddenConnections;
+        Plugin.Event($"CASE record {incoming.id}: kept our {mine.caseElements?.Count ?? 0} pins (our edit isn't sent yet)");
     }
 
     /// <summary>

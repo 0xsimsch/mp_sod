@@ -77,6 +77,14 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.12: case board edits survive the host's case updates
+
+- Seen (client log, 0.9.10): the host sent the same 16 KB case three times in 26 s while the client was pinning; each copy rebuilt the client's board, so pins not sent yet (1 s debounce) were lost and drags were cut off.
+- Host: a case is only sent again when its record changed (`CaseRecordSync._lastSent`). Joiners still get every case.
+- Client: an unchanged record is not applied again. A changed one that arrives while our own board edit waits keeps our pins on the new copy, and the edit still goes out (`KeepLocalBoard`).
+- Both caches are cleared on session start/end and world reloads.
+- Log: client `CASE board edit for N … sent: k pins`, `kept our k pins`; host `CASE board edit … merged` as before.
+
 ## 0.9.11: client light switches reach the host
 
 - A switch flipped by the local player is always sent; the 3 m reach check (meant for the client's own citizens) no longer applies to it. A light switch's stored position can be metres from the player's feet, and one switch also flips the room's other lights, so some of a client's switches never reached the host.
