@@ -83,9 +83,14 @@ buttons' world-y - no scale mismatch (that mismatch is exactly why the gradient 
   subscribable from managed code: the interop delegate's only constructor takes a native `IntPtr`.) It places
   each line at `full column edge + gap` (full = including our copies, so the footer follows Host/Join ↔
   Invite/Leave changes) and only while the row is active, so other panels are left to the game.
-- Caching: once a launch's gaps are validated they go to `PlayerPrefs` (`sodcoop.menuGapTop`/`menuGapBottom`).
-  The next launch places the lines from the cache on frame one (no wrong-position flash) while `TryCaptureBars`
-  still runs and silently updates the cache if the game or a resolution change moved them.
+- Caching: accepted gaps go to `PlayerPrefs` (`sodcoop.menuGapTop.v2`/`menuGapBottom.v2`, plus the `menuGapRes`
+  string they were measured at). The next launch places the lines from the cache on frame one (no
+  wrong-position flash); a resolution change misses the guard and a fresh measurement runs.
+- Trap seen (0.9.19/0.9.20): "re-validate every launch and refresh the cache" is **circular** once cached
+  placement is active - after the first placement, `Embelishment.position.y - columnEdge` measures our own
+  write, not the game's resting spot, and got stored (log: cached bottom -4.9, then "updated" to -81.8 →
+  footer ~80 px too low). Rule now: gaps are measured exactly ONCE per game run, always before the first
+  placement (`_haveGaps` guards both `CaptureBars` re-entry and `TryCaptureBars`), then final for the run.
 - Interop gotchas found while testing (all cost a test run each):
   - `transform.parent as RectTransform` returns **null** at runtime (the wrapper is typed `Transform`) -
     use `GetComponent<RectTransform>()`. Same for children.
@@ -97,7 +102,6 @@ buttons' world-y - no scale mismatch (that mismatch is exactly why the gradient 
     real objects were only settled with a one-off `DumpTree()` (walks the canvas root, logs name/position/
     renderer flags). Kept out of the build; rerun from history if the menu changes.
 - Log lines: `MENU bars use cached offsets: top … / bottom …` (cache hit at open), then
-  `MENU bar offsets captured|updated|confirmed (row MainMenuPanel, N buttons): gaps top … / bottom …;
-  column hi..lo` when the streak accepts, or `MENU bar capture failed: <reason>` (once).
+  `MENU bar offsets captured (row MainMenuPanel, N buttons): gaps top … / bottom …; column hi..lo` when the streak accepts, or `MENU bar capture failed: <reason>` (once).
 - Known cosmetic edge, first run only (no cache yet): the footer sits at the game's fixed spot during the
   button intro and jumps into place ~1 s after it settles. From the second run the cache removes it.
