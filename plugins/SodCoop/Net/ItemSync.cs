@@ -135,6 +135,7 @@ public static class ItemSync
                     break;
                 }
                 case ItemEventKind.Switch:
+                    if (SwitchValue(it, (InteractablePreset.Switch)m.Holder) == m.HolderIsPlayer) break; // already so (the host's confirmation of our own flip)
                     var who = PlayerRegistry.TryGet(new PlayerId(m.ByPlayer), out var by) ? by.Body : null;
                     it.SetSwtichByType((InteractablePreset.Switch)m.Holder, m.HolderIsPlayer, who, true, false);
                     Plugin.Event($"ITEM switch #{m.Id} {it.name} {(InteractablePreset.Switch)m.Holder}={m.HolderIsPlayer} from P{m.ByPlayer} applied");
@@ -144,6 +145,31 @@ public static class ItemSync
         }
         catch (Exception e) { Plugin.Event($"ITEM {m.Kind} #{m.Id} failed: {e.Message}"); }
         finally { _applying = false; }
+    }
+
+    static bool SwitchValue(Interactable it, InteractablePreset.Switch which) => which switch
+    {
+        InteractablePreset.Switch.switchState => it.sw0,
+        InteractablePreset.Switch.custom1 => it.sw1,
+        InteractablePreset.Switch.custom2 => it.sw2,
+        InteractablePreset.Switch.custom3 => it.sw3,
+        InteractablePreset.Switch.lockState => it.locked,
+        _ => !it.sw0,
+    };
+
+    /// <summary>
+    /// Host, after applying a client's switch flip: the switch's state as it is now on the host, for everyone (the
+    /// client that flipped it included). That confirms the flip, and corrects a client whose flip didn't take here.
+    /// </summary>
+    public static bool HostSwitchState(ItemMsg m, out ItemMsg state)
+    {
+        state = m;
+        var it = WorldSync.FindInteractable(m.Id);
+        if (it == null) return false;
+        bool now = SwitchValue(it, (InteractablePreset.Switch)m.Holder);
+        state.HolderIsPlayer = now;
+        if (now != m.HolderIsPlayer) Plugin.Event($"ITEM switch #{m.Id} {it.name}: P{m.ByPlayer} set it to {m.HolderIsPlayer}, the host has {now}; resyncing");
+        return true;
     }
 
     // --- physics: objects a player carried, dropped, threw or pushed. Their resting place is sent once they settle.

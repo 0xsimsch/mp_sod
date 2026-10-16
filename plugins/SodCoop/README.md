@@ -77,6 +77,11 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.14: switch resync after every client flip
+
+- Host: a client's switch flip is applied, then the switch's resulting state on the host goes to every client, the flipper included (instead of relaying the client's message to the others). A client whose flip didn't take on the host is set back to the host's state. Log on a mismatch: `ITEM switch #id …: P1 set it to X, the host has Y; resyncing`.
+- Receivers skip a switch update that matches what they already have (no second click sound for the flipper).
+
 ## 0.9.13: board resync after every client edit
 
 - Host: after merging a client's board edit, it sends the merged case to everyone right away (the editor included), so all boards show the host's state and the edit is confirmed. Log: `CASE board edit … merged: N pins; resyncing everyone`.

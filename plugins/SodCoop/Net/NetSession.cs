@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.13";
+    public const string ModVersion = "0.9.14";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -958,6 +958,13 @@ public sealed class NetSession : IDisposable
         if (Role == SessionRole.Host)
         {
             if (!_playerOf.TryGetValue(from, out var id) || id.Value != m.ByPlayer) return;
+            if (m.Kind == ItemEventKind.Switch)
+            {
+                // Resync: apply, then send the host's resulting state to every client, the flipper included.
+                ItemSync.Apply(m);
+                if (ItemSync.HostSwitchState(m, out var state)) Broadcast(Protocol.Item(state), true);
+                return;
+            }
             foreach (var peer in _playerOf.Keys) if (peer != from) SendTo(peer, data, true);
         }
         ItemSync.Apply(m);
