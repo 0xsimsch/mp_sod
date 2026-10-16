@@ -26,6 +26,8 @@ public sealed class RemotePlayerBody
     bool _originalIsPlayer;
     bool _originalDisableTickRateUpdate;
     bool _originalAiEnabled;
+    ClothesPreset.OutfitCategory _originalOutfit;
+    bool _outfitChanged;
 
     RemotePlayerBody(NetPlayer owner, Citizen donor)
     {
@@ -76,6 +78,8 @@ public sealed class RemotePlayerBody
 
         body.ResetAnimation();
         body.DropCitizenProps();
+        body.ArmWith(null);
+        body.DressAsDetective();
         owner.RemoteBody = body;
         PlayerRegistry.BindRemoteBody(owner, donor);
         Plugin.Event($"{owner} possessed citizen {donor.humanID} \"{donor.citizenName}\"");
@@ -121,6 +125,8 @@ public sealed class RemotePlayerBody
             else if (!Human.visible && dist < 80f) Human.SetVisible(true, true);
             _marker.Ensure(Human, Owner.Id.Value);
             DropCitizenProps();
+            if (!_combatShown) ArmWith(null);
+            DressAsDetective();
             var outfit = OutfitStatus();
             if (outfit != _lastOutfitStatus) { _lastOutfitStatus = outfit; Plugin.Event($"{Owner} body outfit: {outfit}, {dist:F0} m, visible={Human.visible}"); }
         }
@@ -182,6 +188,7 @@ public sealed class RemotePlayerBody
         if (anim == null) return;
         try
         {
+            ArmWith((s & 0x80) != 0 ? HeldWeapon() : null);
             if (!_combatShown) { anim.SetInCombat(true); _combatShown = true; }
             anim.AttackTrigger();
             _combatUntil = Time.time + CombatHold;
@@ -195,6 +202,90 @@ public sealed class RemotePlayerBody
         if (!_combatShown || Time.time < _combatUntil) return;
         _combatShown = false;
         Human.animationController?.SetInCombat(false);
+        ArmWith(null);
+    }
+
+    /// <summary>Players look like detectives: the citizen's own smart outdoor outfit (usually a long coat).</summary>
+    const ClothesPreset.OutfitCategory DetectiveOutfit = ClothesPreset.OutfitCategory.outdoorsSmart;
+
+    void DressAsDetective()
+    {
+        var oc = Human.outfitController;
+        if (oc == null || oc.currentOutfit == DetectiveOutfit) return;
+        try
+        {
+            if (!_outfitChanged) { _originalOutfit = oc.currentOutfit; _outfitChanged = true; }
+            oc.SetCurrentOutfit(DetectiveOutfit, true, false, true);
+            Plugin.Event($"{Owner} body dressed as a detective ({DetectiveOutfit}): {OutfitStatus()}");
+            LogDetectiveClothes();
+        }
+        catch (System.Exception e) { Plugin.Event($"{Owner} body: could not change the outfit: {e.Message}"); }
+    }
+
+    static bool _clothesLogged;
+
+    /// <summary>Once per run: hats and long garments the game has, for picking a fixed detective outfit later.</summary>
+    static void LogDetectiveClothes()
+    {
+        if (_clothesLogged) return;
+        _clothesLogged = true;
+        try
+        {
+            var hats = new System.Collections.Generic.List<string>();
+            var coats = new System.Collections.Generic.List<string>();
+            foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<ClothesPreset>()))
+            {
+                var c = o.TryCast<ClothesPreset>();
+                if (c == null) continue;
+                if (c.covers != null && c.covers.Contains(CitizenOutfitController.CharacterAnchor.Hat)) hats.Add(c.name);
+                else if (c.tags != null && c.tags.Contains(ClothesPreset.ClothesTags.longGarment)) coats.Add(c.name);
+            }
+            Plugin.Event($"CLOTHES hats: {string.Join(", ", hats)}");
+            Plugin.Event($"CLOTHES long garments: {string.Join(", ", coats)}");
+        }
+        catch (System.Exception e) { Plugin.Event($"CLOTHES listing failed: {e.Message}"); }
+    }
+
+    static MurderWeaponPreset _fists;
+
+    /// <summary>The game's bare-hands weapon preset (type fists), found once among the loaded presets.</summary>
+    static MurderWeaponPreset Fists()
+    {
+        if (_fists != null && !_fists.WasCollected) return _fists;
+        foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<MurderWeaponPreset>()))
+        {
+            var w = o.TryCast<MurderWeaponPreset>();
+            if (w != null && w.type == MurderWeaponPreset.WeaponType.fists) { _fists = w; break; }
+        }
+        if (_fists == null) Plugin.Event("no fists weapon preset found; player bodies keep the citizen's weapon");
+        return _fists;
+    }
+
+    /// <summary>The weapon preset of what the player holds, if it is a weapon.</summary>
+    MurderWeaponPreset HeldWeapon()
+    {
+        if (_heldId < 0 || CityData.Instance == null || !CityData.Instance.savableInteractableDictionary.TryGetValue(_heldId, out var it)) return null;
+        return it?.preset?.weapon;
+    }
+
+    /// <summary>
+    /// Player bodies fight with what the player holds, bare hands by default. A borrowed citizen keeps its own weapon
+    /// (seen: the combat stance of a gun owner showed an invisible gun when the host punched). The player's item is
+    /// drawn separately (<see cref="SetHeld"/>), so only the preset (stance and attack animation) changes, no props.
+    /// </summary>
+    void ArmWith(MurderWeaponPreset weapon)
+    {
+        var ai = Human.ai;
+        if (ai == null) return;
+        try
+        {
+            weapon ??= Fists();
+            if (weapon == null || (ai.currentWeaponPreset != null && ai.currentWeaponPreset.Pointer == weapon.Pointer)) return;
+            ai.currentWeapon = null;
+            ai.currentWeaponPreset = weapon;
+            Plugin.Event($"{Owner} body armed with {weapon.name}");
+        }
+        catch (System.Exception e) { Plugin.Event($"{Owner} body: could not set the weapon: {e.Message}"); }
     }
 
     /// <summary>Arms and idle for what the partner is doing (activity first, else what's in their hands).</summary>
@@ -420,6 +511,9 @@ public sealed class RemotePlayerBody
         {
             Human.ai.disableTickRateUpdate = _originalDisableTickRateUpdate;
             Human.ai.enabled = _originalAiEnabled;
+            try { if (_outfitChanged && Human.outfitController != null) Human.outfitController.SetCurrentOutfit(_originalOutfit, false, false, true); }
+            catch (System.Exception e) { Plugin.Event($"{Owner}: outfit restore failed: {e.Message}"); }
+            try { Human.ai.UpdateCurrentWeapon(); } catch (System.Exception e) { Plugin.Event($"{Owner}: weapon restore failed: {e.Message}"); } // its own weapon again, not fists
         }
         var list = CityData.Instance?.visibleActors;
         if (list != null && !Human.visible) list.Remove(Human.Cast<Actor>());
