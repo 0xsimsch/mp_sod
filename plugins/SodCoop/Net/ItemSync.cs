@@ -50,11 +50,12 @@ public static class ItemSync
     }
 
     static void Report(Interactable it, ItemEventKind kind, Actor holder = null, bool wasHeldByLocal = false,
-                       Vector3? pos = null, Vector3? euler = null, int? switchType = null, bool switchValue = false)
+                       Vector3? pos = null, Vector3? euler = null, int? switchType = null, bool switchValue = false,
+                       bool byLocalPlayer = false)
     {
         var s = NetSession.Current;
         if (s == null || _applying || it == null || PlayerRegistry.Local == null || !World.Ready) return;
-        if (!ClientMayReport(it.wPos, holder, wasHeldByLocal)) return;
+        if (!byLocalPlayer && !ClientMayReport(it.wPos, holder, wasHeldByLocal)) return;
         var p = pos ?? it.wPos;
         var e = euler ?? it.wEuler;
         var msg = new ItemMsg
@@ -72,6 +73,7 @@ public static class ItemSync
             msg.HolderIsPlayer = switchValue;
             s.SendItem(msg);
             Sent++;
+            Plugin.Event($"ITEM switch #{it.id} {it.name} {(InteractablePreset.Switch)switchType.Value}={switchValue} sent");
             return;
         }
         if (holder != null)
@@ -89,7 +91,12 @@ public static class ItemSync
         if (!World.Ready) return;
         // Not only saved objects: fixtures such as light switches aren't in savableInteractableDictionary.
         var it = WorldSync.FindInteractable(m.Id);
-        if (it == null) { Missed++; return; }
+        if (it == null)
+        {
+            Missed++;
+            if (m.Kind == ItemEventKind.Switch) Plugin.Event($"ITEM switch #{m.Id} from P{m.ByPlayer}: no such object here");
+            return;
+        }
         _applying = true;
         try
         {
@@ -130,6 +137,7 @@ public static class ItemSync
                 case ItemEventKind.Switch:
                     var who = PlayerRegistry.TryGet(new PlayerId(m.ByPlayer), out var by) ? by.Body : null;
                     it.SetSwtichByType((InteractablePreset.Switch)m.Holder, m.HolderIsPlayer, who, true, false);
+                    Plugin.Event($"ITEM switch #{m.Id} {it.name} {(InteractablePreset.Switch)m.Holder}={m.HolderIsPlayer} from P{m.ByPlayer} applied");
                     break;
             }
             Applied++;
@@ -240,12 +248,25 @@ public static class ItemSync
         static void Postfix(bool __state) { if (__state && _localActionDepth > 0) _localActionDepth--; }
     }
 
+    /// <summary>
+    /// The player's own interaction (key press on an object). Some objects flip their switch from here without an
+    /// ActionController action, again with no interactor.
+    /// </summary>
+    [HarmonyPatch(typeof(Interactable), nameof(Interactable.OnInteraction), typeof(InteractablePreset.InteractionAction), typeof(Actor), typeof(bool), typeof(float))]
+    static class LocalInteraction
+    {
+        static void Prefix(Actor who, out bool __state) { __state = IsLocal(who); if (__state) _localActionDepth++; }
+        static void Postfix(bool __state) { if (__state && _localActionDepth > 0) _localActionDepth--; }
+    }
+
     static void ReportSwitch(Interactable it, InteractablePreset.Switch which, bool val, Actor interactor)
     {
         if (_applying || it == null) return;
         if (!IsLocal(interactor) && !(interactor == null && _localActionDepth > 0)) return;
         if (it.objectRef != null && it.objectRef.TryCast<NewDoor>() != null) return;
-        Report(it, ItemEventKind.Switch, interactor, false, null, null, (int)which, val);
+        // Ours for certain, so no reach check: a light switch's stored position can be metres from the player's feet,
+        // and one switch also flips the room's other lights (seen: a client's switches never reached the host).
+        Report(it, ItemEventKind.Switch, interactor, false, null, null, (int)which, val, byLocalPlayer: true);
     }
 
     [HarmonyPatch(typeof(Interactable), nameof(Interactable.SetSwitchState))]

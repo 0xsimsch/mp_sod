@@ -77,6 +77,12 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.11: client light switches reach the host
+
+- A switch flipped by the local player is always sent; the 3 m reach check (meant for the client's own citizens) no longer applies to it. A light switch's stored position can be metres from the player's feet, and one switch also flips the room's other lights, so some of a client's switches never reached the host.
+- `Interactable.OnInteraction` counts as a local action too (switches flipped there have no interactor). If 0.9.11 crashes at startup, put `LocalInteraction` into `BepInEx/sodcoop_skip_patches`.
+- Log: `ITEM switch #id … sent` (sender), `… from P1 applied` or `no such object here` (receiver).
+
 ## 0.9.10: objectives complete only on the host (protocol v38, untested in game)
 
 - A client's case objectives never progress or complete by themselves. When the client's own check finds a trigger met, it sends a **fact** to the host: case, objective, trigger name and type (`ObjectiveSync.TriggerPatch`, resent every 3 s while the condition holds).
