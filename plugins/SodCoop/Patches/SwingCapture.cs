@@ -17,6 +17,13 @@ static class SwingCapture
     /// <summary>Low 7 bits: swing counter (wraps). Bit 7: the last swing was with a weapon.</summary>
     public static byte Swings { get; private set; }
 
+    /// <summary>Blocks so far (wrapping counter).</summary>
+    public static byte Blocks { get; private set; }
+
+    // Block() is called from OnInteraction (input), not from an animation event, so it can be hooked.
+    [HarmonyPatch(typeof(FirstPersonItemController), nameof(FirstPersonItemController.Block))]
+    static class BlockPatch { static void Postfix() => Blocks++; }
+
     static readonly int PunchId = Animator.StringToHash("Punch");
     static readonly int AttackId = Animator.StringToHash("Attack");
 

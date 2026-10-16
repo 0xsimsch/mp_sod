@@ -184,7 +184,7 @@ public sealed class RemotePlayerBody
         if (anim == null) return;
         try
         {
-            ArmWith((s & 0x80) != 0 ? HeldWeapon() : null);
+            if (!_weaponDrawn) ArmWith((s & 0x80) != 0 ? HeldWeapon() : null);
             if (!_combatShown) { anim.SetInCombat(true); _combatShown = true; }
             anim.AttackTrigger();
             _combatUntil = Time.time + CombatHold;
@@ -192,10 +192,45 @@ public sealed class RemotePlayerBody
         catch (System.Exception e) { Plugin.Event($"{Owner} swing failed: {e.Message}"); }
     }
 
-    /// <summary>Drop the fighting stance a moment after the last swing.</summary>
+    int _blocks = -1;
+
+    /// <summary>The player blocked (counter in every pose, like swings).</summary>
+    public void SetBlocks(byte b)
+    {
+        if (_blocks < 0 || Human == null || Human.WasCollected) { _blocks = b; return; }
+        if (b == _blocks) return;
+        _blocks = b;
+        if (KnockedOut || Hidden) return;
+        try
+        {
+            var anim = Human.animationController;
+            if (anim == null) return;
+            if (!_combatShown) { anim.SetInCombat(true); _combatShown = true; }
+            anim.BlockTrigger(0.5f, false);
+            _combatUntil = Time.time + CombatHold;
+        }
+        catch (System.Exception e) { Plugin.Event($"{Owner} block failed: {e.Message}"); }
+    }
+
+    bool _weaponDrawn;
+
+    /// <summary>A drawn weapon (gun, knife, bat…) is shown the way citizens show one: the combat stance with that weapon.</summary>
+    void UpdateDrawnWeapon()
+    {
+        var w = _held is Net.HeldKind.Item or Net.HeldKind.Raised ? HeldWeapon() : null;
+        bool drawn = w != null && w.type != MurderWeaponPreset.WeaponType.fists && !_sitShown && !_lieShown && !Hidden;
+        if (drawn == _weaponDrawn) return;
+        _weaponDrawn = drawn;
+        _armsShown = (CitizenAnimationController.ArmsBoolSate)255;
+        var anim = Human.animationController;
+        if (drawn) { ArmWith(w); anim?.SetInCombat(true); }
+        else if (!_combatShown) { anim?.SetInCombat(false); ArmWith(null); }
+    }
+
+    /// <summary>Drop the fighting stance a moment after the last swing (kept while a weapon is drawn).</summary>
     void UpdateCombat()
     {
-        if (!_combatShown || Time.time < _combatUntil) return;
+        if (!_combatShown || Time.time < _combatUntil || _weaponDrawn) return;
         _combatShown = false;
         Human.animationController?.SetInCombat(false);
         ArmWith(null);
@@ -256,7 +291,9 @@ public sealed class RemotePlayerBody
             Net.PlayerActivity.Smoking => CitizenAnimationController.ArmsBoolSate.armsSmoking,
             Net.PlayerActivity.Reading => CitizenAnimationController.ArmsBoolSate.armsReading,
             Net.PlayerActivity.Searching => CitizenAnimationController.ArmsBoolSate.armsUse,
-            _ => _held is Net.HeldKind.Item or Net.HeldKind.Raised ? CitizenAnimationController.ArmsBoolSate.armsUse : CitizenAnimationController.ArmsBoolSate.none,
+            // A drawn weapon is shown by the combat stance (UpdateDrawnWeapon); a plain item just sits in the hand;
+            // raising an item (scanner, camera, aiming) is the generic "using something" arms pose.
+            _ => _held == Net.HeldKind.Raised && !_weaponDrawn ? CitizenAnimationController.ArmsBoolSate.armsUse : CitizenAnimationController.ArmsBoolSate.none,
         };
         if (arms != _armsShown) { anim.SetArmsBoolState(arms); _armsShown = arms; }
         // The phone is an idle pose; sitting/lying/kneeling own the idle state while they're shown.
@@ -355,6 +392,7 @@ public sealed class RemotePlayerBody
             UpdateFlashlight();
             if (_sitting || _lying || _sitShown || _lieShown) UpdateSeated();
             if (!_sitShown && !_lieShown) UpdateCrouch();
+            UpdateDrawnWeapon();
             UpdateActivity();
             if (_held == Net.HeldKind.Carried && _heldId >= 0 && !_heldWasThrown &&
                 CityData.Instance.savableInteractableDictionary.TryGetValue(_heldId, out var carried) && carried?.controller != null)
@@ -379,7 +417,13 @@ public sealed class RemotePlayerBody
     bool _heldWasThrown;
 
     /// <summary>ItemSync: this player threw the object it was carrying (don't pull it back into the hands).</summary>
-    public void OnThrew(int id) { if (id == _heldId) _heldWasThrown = true; }
+    public void OnThrew(int id)
+    {
+        if (id != _heldId) return;
+        _heldWasThrown = true;
+        try { if (!KnockedOut && !Hidden) Human?.animationController?.ThrowTrigger(); }
+        catch (System.Exception e) { Plugin.Event($"{Owner} throw animation failed: {e.Message}"); }
+    }
 
     void SetHeld(int id, Net.HeldKind kind)
     {
@@ -425,14 +469,15 @@ public sealed class RemotePlayerBody
     void UpdateCrouch()
     {
         bool crouched = Human.isCrouched && !Hidden;
-        bool kneel = crouched && !Human.isMoving;
+        // checkPulse kneels and reaches for the floor: right when the player looks down at something, wrong otherwise.
+        bool kneel = crouched && !Human.isMoving && _shownPitch > 30f;
         var anim = Human.animationController;
         if (anim != null && kneel != _crouchIdleShown)
         {
             anim.SetIdleAnimationState(kneel ? CitizenAnimationController.IdleAnimationState.checkPulse : CitizenAnimationController.IdleAnimationState.none);
             _crouchIdleShown = kneel;
         }
-        float target = crouched && Human.isMoving ? CrouchWalkScale : 1f;
+        float target = crouched && !kneel ? CrouchWalkScale : 1f;
         _shownScaleY = Mathf.MoveTowards(_shownScaleY, target, Time.deltaTime * 3f);
         var model = Human.transform;
         var s = model.localScale;
