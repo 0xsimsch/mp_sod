@@ -26,8 +26,6 @@ public sealed class RemotePlayerBody
     bool _originalIsPlayer;
     bool _originalDisableTickRateUpdate;
     bool _originalAiEnabled;
-    ClothesPreset.OutfitCategory _originalOutfit;
-    bool _outfitChanged;
 
     RemotePlayerBody(NetPlayer owner, Citizen donor)
     {
@@ -79,7 +77,6 @@ public sealed class RemotePlayerBody
         body.ResetAnimation();
         body.DropCitizenProps();
         body.ArmWith(null);
-        body.DressAsDetective();
         owner.RemoteBody = body;
         PlayerRegistry.BindRemoteBody(owner, donor);
         Plugin.Event($"{owner} possessed citizen {donor.humanID} \"{donor.citizenName}\"");
@@ -126,7 +123,6 @@ public sealed class RemotePlayerBody
             _marker.Ensure(Human, Owner.Id.Value);
             DropCitizenProps();
             if (!_combatShown) ArmWith(null);
-            DressAsDetective();
             var outfit = OutfitStatus();
             if (outfit != _lastOutfitStatus) { _lastOutfitStatus = outfit; Plugin.Event($"{Owner} body outfit: {outfit}, {dist:F0} m, visible={Human.visible}"); }
         }
@@ -203,47 +199,6 @@ public sealed class RemotePlayerBody
         _combatShown = false;
         Human.animationController?.SetInCombat(false);
         ArmWith(null);
-    }
-
-    /// <summary>Players look like detectives: the citizen's own smart outdoor outfit (usually a long coat).</summary>
-    const ClothesPreset.OutfitCategory DetectiveOutfit = ClothesPreset.OutfitCategory.outdoorsSmart;
-
-    void DressAsDetective()
-    {
-        var oc = Human.outfitController;
-        if (oc == null || oc.currentOutfit == DetectiveOutfit) return;
-        try
-        {
-            if (!_outfitChanged) { _originalOutfit = oc.currentOutfit; _outfitChanged = true; }
-            oc.SetCurrentOutfit(DetectiveOutfit, true, false, true);
-            Plugin.Event($"{Owner} body dressed as a detective ({DetectiveOutfit}): {OutfitStatus()}");
-            LogDetectiveClothes();
-        }
-        catch (System.Exception e) { Plugin.Event($"{Owner} body: could not change the outfit: {e.Message}"); }
-    }
-
-    static bool _clothesLogged;
-
-    /// <summary>Once per run: hats and long garments the game has, for picking a fixed detective outfit later.</summary>
-    static void LogDetectiveClothes()
-    {
-        if (_clothesLogged) return;
-        _clothesLogged = true;
-        try
-        {
-            var hats = new System.Collections.Generic.List<string>();
-            var coats = new System.Collections.Generic.List<string>();
-            foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<ClothesPreset>()))
-            {
-                var c = o.TryCast<ClothesPreset>();
-                if (c == null) continue;
-                if (c.covers != null && c.covers.Contains(CitizenOutfitController.CharacterAnchor.Hat)) hats.Add(c.name);
-                else if (c.tags != null && c.tags.Contains(ClothesPreset.ClothesTags.longGarment)) coats.Add(c.name);
-            }
-            Plugin.Event($"CLOTHES hats: {string.Join(", ", hats)}");
-            Plugin.Event($"CLOTHES long garments: {string.Join(", ", coats)}");
-        }
-        catch (System.Exception e) { Plugin.Event($"CLOTHES listing failed: {e.Message}"); }
     }
 
     static MurderWeaponPreset _fists;
@@ -511,8 +466,6 @@ public sealed class RemotePlayerBody
         {
             Human.ai.disableTickRateUpdate = _originalDisableTickRateUpdate;
             Human.ai.enabled = _originalAiEnabled;
-            try { if (_outfitChanged && Human.outfitController != null) Human.outfitController.SetCurrentOutfit(_originalOutfit, false, false, true); }
-            catch (System.Exception e) { Plugin.Event($"{Owner}: outfit restore failed: {e.Message}"); }
             try { Human.ai.UpdateCurrentWeapon(); } catch (System.Exception e) { Plugin.Event($"{Owner}: weapon restore failed: {e.Message}"); } // its own weapon again, not fists
         }
         var list = CityData.Instance?.visibleActors;

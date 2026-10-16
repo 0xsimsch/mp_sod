@@ -52,6 +52,41 @@ public class SessionOverlay : MonoBehaviour
         GUI.color = old;
     }
 
+    GUIStyle _tagStyle;
+    bool _tagFailed;
+    const float NametagRange = 60f;
+
+    /// <summary>The partner's name above their body (also through walls), smaller with distance; not while paused.</summary>
+    void DrawNametags()
+    {
+        var cam = Camera.main;
+        if (cam == null || NetSession.Current == null || Patches.PauseSync.LocalPaused) return;
+        if (_tagStyle == null)
+        {
+            _tagStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerCenter, fontStyle = FontStyle.Bold, wordWrap = false };
+        }
+        foreach (var p in Core.PlayerRegistry.All)
+        {
+            var body = p.RemoteBody;
+            if (p.IsLocal || body == null || body.Hidden || body.Human == null) continue;
+            var neck = body.Human.neckTransform;
+            var top = neck != null ? neck.position + Vector3.up * 0.4f : body.Human.transform.position + Vector3.up * 2.1f;
+            float dist = Vector3.Distance(cam.transform.position, top);
+            if (dist > NametagRange) continue;
+            var sp = cam.WorldToScreenPoint(top);
+            if (sp.z <= 0f) continue; // behind the camera
+            _tagStyle.fontSize = Math.Max(12, (int)(Screen.height / 40f * Mathf.Lerp(1f, 0.5f, dist / NametagRange)));
+            var text = new GUIContent(string.IsNullOrEmpty(p.DisplayName) ? "Player" : p.DisplayName);
+            var size = _tagStyle.CalcSize(text);
+            var r = new Rect(sp.x - size.x / 2f, Screen.height - sp.y - size.y, size.x, size.y);
+            float alpha = Mathf.Lerp(1f, 0.6f, dist / NametagRange);
+            _tagStyle.normal.textColor = new Color(0f, 0f, 0f, alpha * 0.8f);
+            GUI.Label(new Rect(r.x + 1f, r.y + 1f, r.width, r.height), text, _tagStyle);
+            _tagStyle.normal.textColor = new Color(1f, 1f, 1f, alpha);
+            GUI.Label(r, text, _tagStyle);
+        }
+    }
+
     public SessionOverlay(IntPtr ptr) : base(ptr) { }
 
     void Update()
@@ -67,6 +102,8 @@ public class SessionOverlay : MonoBehaviour
     void OnGUI()
     {
         DrawKoProgress();
+        try { DrawNametags(); }
+        catch (Exception e) { if (!_tagFailed) { _tagFailed = true; Plugin.Event($"nametags failed: {e.Message}"); } }
         if (CoopBehaviour.TraceFrames > 0) Plugin.Event($"TRACE f{Time.frameCount} overlay OnGUI ({_text.Length} chars)");
         if (!Visible || _text.Length == 0) return;
         if (_style == null)
