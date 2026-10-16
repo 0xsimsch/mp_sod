@@ -156,6 +156,13 @@ public static class CaseRecordSync
     [HarmonyPatch(typeof(CasePanelController), nameof(CasePanelController.UnPinFromCasePanel))]
     static class Unpin { static void Postfix() => BoardEdited(); }
 
+    /// <summary>Hiding/showing a connection (stored in <c>Case.hiddenConnections</c>, merged by the host).</summary>
+    [HarmonyPatch(typeof(Case), nameof(Case.SetHidden))]
+    static class HideConnection { static void Postfix(Case __instance) => BoardEdited(__instance); }
+
+    [HarmonyPatch(typeof(Case), nameof(Case.ToggleHidden))] // the fact window's button; doesn't go through SetHidden
+    static class ToggleConnection { static void Postfix(Case __instance) => BoardEdited(__instance); }
+
     /// <summary>Client: records held back while the mouse button is down (a board rebuild would cut off a drag).</summary>
     static readonly Dictionary<int, (string json, bool active, float since)> _deferred = new();
     const float MaxDefer = 10f;
