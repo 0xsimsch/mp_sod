@@ -51,3 +51,25 @@ deadlock Unity's async loading.
 should wait until the menu has settled before switching to `loadingCity`: no pending `AsyncOperation`, and a few
 seconds since `MainMenuController.Start`. If it still freezes, add TRACE lines around `EnableMainMenu`,
 `SetMenuComponent` and `CityConstructor.StartLoading`, and grab the main thread's stack with `winedbg` while it hangs.
+
+## Crime-scene street gone for both players after picking up the mission documents (0.9.5)
+
+**Seen (client log, 2026-10-16):**
+- 20:59:28.616: case 1 "New Murder Case" arrives on the client with 2 active objectives.
+- 20:59:28.643, 27 ms later: the client's freshly built copy of 'Explore Reported Crime Scene: 402 Lagoon Hotel'
+  completes by itself, and the client asks the host to complete it.
+- The host apparently didn't act on that request: there's no completion until 21:00:15. Then "Host completed an
+  objective" (the host's own completion, when the host picked up the documents).
+- 21:00:16: the case comes back as "Scope-Out Assassin" with 5 active objectives. That's the killer's moniker
+  (`MonikerVoyeurKiller`), so the rename is the game's own story progress.
+- From then on, neither player sees the street in the objective text or on the map.
+
+**Open:**
+- Is this the game's normal flow? In single player, does picking up the documents complete "Explore Reported Crime
+  Scene" and remove the address? Check in a solo game.
+- If not, the host's `sodcoop.log` around the pickup will show the cause, e.g. "OBJ P1 completed … completing it for
+  everyone".
+- Why does the client's objective complete 27 ms after `SetupObjectives` rebuilt it? That premature request is a bug
+  either way. If the host ever accepts it, it removes the crime scene for everyone, the same failure 0.9.3 fixed.
+  Maybe the trigger checks a condition that is already true on the client, or `SetupObjectives` runs the check
+  loop at once.
