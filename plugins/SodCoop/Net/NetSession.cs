@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.6";
+    public const string ModVersion = "0.9.7";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -446,7 +446,7 @@ public sealed class NetSession : IDisposable
         var items = FirstPersonItemController.Instance;
         if (items != null && items.flashlight) msg.Flags |= PoseFlags.PlayerFlashlight;
         msg.Flags |= SeatedFlags(p, msg.Position.Y);
-        if ((msg.Flags & PoseFlags.PlayerSitting) != 0) msg.Position.Y = SeatedFloorY(p, msg.Position.Y);
+        if ((msg.Flags & PoseFlags.PlayerSitting) != 0) LogSeated(p, msg.Position.Y);
         msg.Activity = ActivityOf(p);
         msg.Swings = Patches.SwingCapture.Swings;
         var cam = p.cam != null && p.cam.cam != null ? p.cam.cam.transform : Camera.main != null ? Camera.main.transform : null;
@@ -509,10 +509,10 @@ public sealed class NetSession : IDisposable
             float eyes = cam.position.y - feetY;
             if (eyes < 0.7f) return PoseFlags.PlayerLying;
             // Sitting down moves the player up onto the seat, so the eyes can stay at standing height above the
-            // capsule (seen: the body stood on the chair). The game keeps the last transition (SitDown,
+            // capsule (seen: the body stood on the chair). The game keeps the last transition (ChairEnter, SitDown,
             // SitDownHunched, SitFloor) until the next one, so trust its name while we're locked into the seat.
             string transition = p.currentTransition != null ? p.currentTransition.name : "";
-            if (transition.StartsWith("Sit") || eyes < 1.35f) return PoseFlags.PlayerSitting;
+            if (transition.StartsWith("Sit") || transition.StartsWith("Chair") || eyes < 1.35f) return PoseFlags.PlayerSitting;
         }
         catch { /* best effort */ }
         return 0;
@@ -521,24 +521,15 @@ public sealed class NetSession : IDisposable
     static bool _seatLogged;
 
     /// <summary>
-    /// A citizen's sitting animation lowers its hips from a body that stands on the floor; the seated player's
-    /// capsule rests on the seat instead. Send the floor under the seat: the player's path node, else a seat height.
+    /// The citizen sitting animation expects the body at seat height, which is where the seated player's capsule rests
+    /// (tested: the floor under the seat put the body half a body too low). Logged once for checking other seats.
     /// </summary>
-    static float SeatedFloorY(Player p, float feetY)
+    static void LogSeated(Player p, float feetY)
     {
-        float y = feetY - 0.45f;
-        try
-        {
-            var node = p.currentNode;
-            if (node != null && feetY - node.position.y > 0.1f && feetY - node.position.y < 1.2f) y = node.position.y;
-            if (!_seatLogged)
-            {
-                _seatLogged = true;
-                Plugin.Event($"POSE seated: transition={(p.currentTransition != null ? p.currentTransition.name : "-")} feet y={feetY:F2} node y={(node != null ? node.position.y.ToString("F2") : "-")} → body at {y:F2}");
-            }
-        }
+        if (_seatLogged) return;
+        _seatLogged = true;
+        try { Plugin.Event($"POSE seated: transition={(p.currentTransition != null ? p.currentTransition.name : "-")} body at seat y={feetY:F2} (floor node y={(p.currentNode != null ? p.currentNode.position.y.ToString("F2") : "-")})"); }
         catch { /* best effort */ }
-        return y;
     }
 
     /// <summary>What the local player is doing, for the partner's view (first match wins).</summary>
