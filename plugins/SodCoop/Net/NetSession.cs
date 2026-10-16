@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.22";
+    public const string ModVersion = "0.9.23";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -450,7 +450,7 @@ public sealed class NetSession : IDisposable
         var items = FirstPersonItemController.Instance;
         if (items != null && items.flashlight) msg.Flags |= PoseFlags.PlayerFlashlight;
         msg.Flags |= SeatedFlags(p, msg.Position.Y);
-        if ((msg.Flags & PoseFlags.PlayerSitting) != 0) LogSeated(p, msg.Position.Y);
+        if ((msg.Flags & PoseFlags.PlayerSitting) != 0) msg.Position = SeatPosition(p, msg.Position);
         msg.Activity = ActivityOf(p);
         msg.Swings = Patches.SwingCapture.Swings;
         msg.Blocks = Patches.SwingCapture.Blocks;
@@ -523,18 +523,38 @@ public sealed class NetSession : IDisposable
         return 0;
     }
 
-    static bool _seatLogged;
+
+    static int _seatLoggedFor = -1;
 
     /// <summary>
-    /// The citizen sitting animation expects the body at seat height, which is where the seated player's capsule rests
-    /// (tested: the floor under the seat put the body half a body too low). Logged once for checking other seats.
+    /// Where a citizen would sit on the seat the player is locked into: the seat's usage point (the spot the AI walks
+    /// to and sits at), which matches the citizen sitting animation on that object (sofas, stools and bar chairs
+    /// differ). Falls back to the player's capsule bottom (the seat surface) when there's no usage point or it is
+    /// implausibly far away. Logged once per seat.
     /// </summary>
-    static void LogSeated(Player p, float feetY)
+    static Vec3 SeatPosition(Player p, Vec3 feet)
     {
-        if (_seatLogged) return;
-        _seatLogged = true;
-        try { Plugin.Event($"POSE seated: transition={(p.currentTransition != null ? p.currentTransition.name : "-")} body at seat y={feetY:F2} (floor node y={(p.currentNode != null ? p.currentNode.position.y.ToString("F2") : "-")})"); }
-        catch { /* best effort */ }
+        try
+        {
+            var seat = InteractionController.Instance != null ? InteractionController.Instance.lockedInInteraction : null;
+            var up = seat?.usagePoint;
+            if (up == null) { LogSeat(p, seat, feet, null); return feet; }
+            var use = up.GetUsageWorldPosition(new Vector3(feet.X, feet.Y, feet.Z), p);
+            float dy = use.y - feet.Y, dxz = new Vector2(use.x - feet.X, use.z - feet.Z).magnitude;
+            if (Mathf.Abs(dy) > 1.2f || dxz > 1f) { LogSeat(p, seat, feet, use, "too far, kept the seat surface"); return feet; }
+            LogSeat(p, seat, feet, use);
+            return new Vec3(use.x, use.y, use.z);
+        }
+        catch (Exception e) { Plugin.Event($"POSE seat position failed: {e.Message}"); return feet; }
+    }
+
+    static void LogSeat(Player p, Interactable seat, Vec3 feet, Vector3? use, string note = null)
+    {
+        int id = seat != null ? seat.id : 0;
+        if (id == _seatLoggedFor) return;
+        _seatLoggedFor = id;
+        Plugin.Event($"POSE seated on {(seat?.preset != null ? seat.preset.name : "?")} #{id}: transition={(p.currentTransition != null ? p.currentTransition.name : "-")} " +
+                     $"capsule y={feet.Y:F2} usage point={(use.HasValue ? $"({use.Value.x:F2}, {use.Value.y:F2}, {use.Value.z:F2})" : "none")}{(note != null ? " — " + note : "")}");
     }
 
     /// <summary>What the local player is doing, for the partner's view (first match wins).</summary>
