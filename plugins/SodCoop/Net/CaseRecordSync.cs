@@ -278,7 +278,10 @@ public static class CaseRecordSync
         if (!string.IsNullOrEmpty(incoming.name)) mine.name = incoming.name;
         if (panel.activeCase != null && panel.activeCase.Pointer == mine.Pointer)
         {
-            panel.SetActiveCase(mine); // rebuild the board from the merged elements
+            // SetActiveCase returns at once when the case is already active (seen: the host saw a client's pins only
+            // after reopening the board). UpdatePinned is the game's own redraw: it drops pins whose element is gone,
+            // spawns the new ones and redraws the strings.
+            panel.UpdatePinned();
             panel.UpdateStrings();
         }
         // Resync: the merged case goes straight back to everyone (the editor included), so every board shows the
