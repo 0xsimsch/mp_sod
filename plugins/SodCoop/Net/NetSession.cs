@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.24";
+    public const string ModVersion = "0.9.25";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -312,6 +312,8 @@ public sealed class NetSession : IDisposable
             if (Role == SessionRole.Host && _playerOf.Count > 0) Broadcast(Protocol.BodyMap(BodyMapNow()), true);
             Puppet.Doubles.Tick();
         }
+        Patches.PauseSync.Watchdog(now);
+        if ((Role == SessionRole.Host && _playerOf.Count > 0) || (Role == SessionRole.Client && _welcomed)) DragSync.Tick(now);
         if (Role == SessionRole.Host) Patches.PauseSync.HostTick(_playerOf.Keys);
         else
         {
@@ -677,7 +679,7 @@ public sealed class NetSession : IDisposable
             case MsgType.Death when Role == SessionRole.Client: DeathSync.Apply(Protocol.ReadDeath(data)); break;
             case MsgType.MurderRecord when Role == SessionRole.Client: MurderSync.Apply(Protocol.ReadMurderRecord(data)); break;
             case (MsgType)ExtraWire.Objective: case (MsgType)ExtraWire.CaseResolve:
-            case (MsgType)ExtraWire.Status: case (MsgType)ExtraWire.Notice:
+            case (MsgType)ExtraWire.Status: case (MsgType)ExtraWire.Notice: case (MsgType)ExtraWire.Drag:
                 ExtraWire.OnPacket(this, from, Role == SessionRole.Host && _playerOf.TryGetValue(from, out var xp) ? xp : (PlayerId?)null, (byte)type.Value, data);
                 break;
             case MsgType.CitizenEvent when Role == SessionRole.Client: CitizenEventSync.OnEvent(data); break;

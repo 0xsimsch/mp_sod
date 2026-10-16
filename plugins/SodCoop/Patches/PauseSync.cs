@@ -94,6 +94,60 @@ static class PauseSync
         if (LocalPaused == paused) return;
         LocalPaused = paused;
         ReportPending = true;
+        Plugin.Event($"PAUSE local {(paused ? "paused" : "resumed")} ({UiState()})");
+    }
+
+    static string UiState()
+    {
+        try
+        {
+            var ic = InterfaceController.Instance;
+            var sd = SessionData.Instance;
+            return $"desktop={(ic != null && ic.desktopMode)} board={(ic != null && ic.showDesktopCaseBoard)} " +
+                   $"menu={(MainMenuController.Instance != null && MainMenuController.Instance.mainMenuActive)} delay={(sd != null ? sd.pauseUnpauseDelay : -1)}";
+        }
+        catch { return "?"; }
+    }
+
+    /// <summary>The player has the case board/notebook/map (desktop mode) or the Esc menu open.</summary>
+    static bool MenuOpen()
+    {
+        var ic = InterfaceController.Instance;
+        var mm = MainMenuController.Instance;
+        return (ic != null && ic.desktopMode) || (mm != null && mm.mainMenuActive);
+    }
+
+    static float _mismatchSince = -1f;
+    static bool _stuckLogged;
+
+    /// <summary>
+    /// Per frame: keep <see cref="LocalPaused"/> honest. The game ignores a pause within its pause/unpause delay
+    /// (<c>SessionData.pauseUnpauseDelay</c>, "Pause ignored due to pause/unpause delay"), so opening the board right
+    /// after closing something left it open while unpaused: the camera followed the mouse behind it and nothing could
+    /// be pinned. A menu open for 0.4 s while not paused is paused properly (delay overridden). The opposite (paused
+    /// with no board or menu: dialogs and some screens pause without them) is only logged, as a lead for "stuck".
+    /// </summary>
+    public static void Watchdog(float now)
+    {
+        var sd = SessionData.Instance;
+        if (sd == null || !InSession || _inInput) return;
+        bool open = MenuOpen();
+        if (open == LocalPaused) { _mismatchSince = -1f; _stuckLogged = false; return; }
+        if (_mismatchSince < 0f) { _mismatchSince = now; return; }
+        if (now - _mismatchSince < 0.4f) return;
+        if (open)
+        {
+            Plugin.Event($"PAUSE a menu is open but we aren't paused ({UiState()}): pausing now");
+            sd.play = true; // what the game expects before a pause (our prefix sets it from LocalPaused anyway)
+            sd.PauseGame(false, true, false);
+            _mismatchSince = -1f;
+        }
+        else if (!_stuckLogged && now - _mismatchSince > 3f)
+        {
+            _stuckLogged = true;
+            var ic = InteractionController.Instance;
+            Plugin.Event($"PAUSE paused for 3 s with no board or menu open ({UiState()} lockedIn={(ic?.lockedInInteraction != null ? ic.lockedInInteraction.name : "none")}) — a dialog, or stuck?");
+        }
     }
 
     [HarmonyPatch(typeof(SessionData), nameof(SessionData.PauseGame))]
@@ -105,9 +159,11 @@ static class PauseSync
             if (InSession && !_inInput) __instance.play = !LocalPaused;
         }
 
-        static void Postfix(SessionData __instance)
+        static void Postfix(SessionData __instance, bool delayOverride)
         {
             if (TimeSync.Applying) return;
+            if (InSession && __instance.play && !delayOverride && __instance.pauseUnpauseDelay > 0)
+                Plugin.Event($"PAUSE the game ignored a pause (pause/unpause delay {__instance.pauseUnpauseDelay})");
             SetLocal(!__instance.play);
             if (_inInput) _toggledInInput = true; else ApplyWorld();
         }

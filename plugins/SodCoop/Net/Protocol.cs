@@ -94,6 +94,8 @@ public enum MsgType : byte
     Newspaper = 51,
     /// <summary>client → host: the client's rest state (sleeping/waiting/KO'd) (RestSync).</summary>
     RestState = 52,
+    /// <summary>both ways (host relays): a dragged body's limb pose (DragSync, framed by ExtraWire).</summary>
+    BodyDrag = 53,
 }
 
 public struct Vec3
@@ -383,7 +385,7 @@ public struct ForensicMsg
 public static class Protocol
 {
     /// <summary>Bump on any wire change. Hosts reject other versions in the handshake.</summary>
-    public const ushort Version = 39;
+    public const ushort Version = 40;
     const ushort Magic = 0x4D53; // "SM"
 
     public static byte[] Hello(HelloMsg m) => Write(MsgType.Hello, w =>

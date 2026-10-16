@@ -18,6 +18,7 @@ public static class ExtraWire
     public const byte CaseResolve = 40; // ObjectiveSync (answers, resolution)
     public const byte Status = 41;      // StatusSync
     public const byte Notice = 42;      // Notify
+    public const byte Drag = 53;        // DragSync (42 + 1 … 52 are Protocol's)
 
     public static byte[] Write(byte type, byte kind, Action<BinaryWriter> body)
     {
@@ -62,6 +63,7 @@ public static class ExtraWire
                 case CaseResolve: ObjectiveSync.OnPacket(s, from, fromPlayer, type, data); break;
                 case Status: StatusSync.OnPacket(s, from, fromPlayer, data); break;
                 case Notice: Notify.OnPacket(s, from, fromPlayer, data); break;
+                case Drag: DragSync.OnPacket(s, from, fromPlayer, data); break;
             }
         }
         catch (Exception e) { Plugin.Event($"EXTRA message {type} failed: {e.Message}"); }
