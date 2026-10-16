@@ -80,6 +80,8 @@ static class PauseSync
     {
         _clientPaused.Clear();
         WorldPaused = false;
+        _pauseHoldsMovement = false;
+        _frozenSince = -1f;
         var sd = SessionData.Instance;
         // Hand the game back the state its UI expects.
         if (sd != null && sd.play == LocalPaused)
@@ -148,6 +150,80 @@ static class PauseSync
             var ic = InteractionController.Instance;
             Plugin.Event($"PAUSE paused for 3 s with no board or menu open ({UiState()} lockedIn={(ic?.lockedInInteraction != null ? ic.lockedInInteraction.name : "none")}) — a dialog, or stuck?");
         }
+        MovementCheck(now);
+    }
+
+    /// <summary>The game's own pause took the player's movement away (Player.OnPauseChange) and hasn't given it back.</summary>
+    static bool _pauseHoldsMovement;
+    static bool _inPauseChange;
+
+    /// <summary>
+    /// <c>Player.OnPauseChange</c> (0x44D3D0): with <c>play</c> false it saves <c>fps.enableMovement</c> into
+    /// <c>pausedRememberPlayerMovement</c> and disables movement; with <c>play</c> true it restores the saved value
+    /// (skipped entirely in dialog/<c>interactionMode</c> or floor edit). In single player nothing runs while paused, so
+    /// the saved value stays right. Here the world keeps running behind the board: a transition that had movement off
+    /// (searching the victim, SearchEnter/Exit) finished while the board was open and turned movement on, then closing
+    /// the board restored the saved "off" and the player couldn't walk.
+    /// </summary>
+    [HarmonyPatch(typeof(Player), "OnPauseChange")]
+    static class PlayerPauseChange
+    {
+        static void Prefix() => _inPauseChange = true;
+
+        static void Postfix()
+        {
+            _inPauseChange = false;
+            var ic = InteractionController.Instance;
+            var sd = SessionData.Instance;
+            if (ic == null || sd == null || ic.interactionMode || sd.isFloorEdit) return; // the game skipped it
+            _pauseHoldsMovement = !sd.play;
+        }
+    }
+
+    /// <summary>
+    /// While the pause holds the movement, a change from anything else (a transition ending, a phone, a cutscene) goes
+    /// into the saved value instead, so the resume applies it: the order single player gets.
+    /// </summary>
+    [HarmonyPatch(typeof(Player), nameof(Player.EnablePlayerMovement))]
+    static class MovementWhilePaused
+    {
+        static bool Prefix(Player __instance, bool val)
+        {
+            if (_inPauseChange || !_pauseHoldsMovement || !InSession) return true;
+            if (__instance.pausedRememberPlayerMovement != val)
+                Plugin.Event($"PAUSE movement turned {(val ? "on" : "off")} behind the menu: applied when it closes");
+            __instance.pausedRememberPlayerMovement = val;
+            return false;
+        }
+    }
+
+    static float _frozenSince = -1f;
+
+    /// <summary>
+    /// Safety net: not paused, no menu, and nothing that locks the player (transition, seat/search/computer, dialog,
+    /// phone, cutscene, hiding, vent, bed, KO, death), yet movement is off for 3 s: turn it back on, and log the state.
+    /// </summary>
+    static void MovementCheck(float now)
+    {
+        try
+        {
+            var p = Player.Instance;
+            var ic = InteractionController.Instance;
+            var cut = CutSceneController.Instance;
+            bool explained = p == null || p.fps == null || p.fps.enableMovement || LocalPaused || MenuOpen() ||
+                             p.transitionActive || p.playerKOInProgress || p.isDead || p.isStunned || p.isHiding ||
+                             p.inAirVent || p.isInBed || p.activeCall != null || p.isLockpicking ||
+                             ic == null || ic.lockedInInteraction != null || ic.interactionMode || ic.currentlyDragging != null ||
+                             (cut != null && cut.cutSceneActive);
+            if (explained) { _frozenSince = -1f; return; }
+            if (_frozenSince < 0f) { _frozenSince = now; return; }
+            if (now - _frozenSince < 3f) return;
+            _frozenSince = -1f;
+            Plugin.Event($"PAUSE movement was off for 3 s with nothing holding it ({UiState()} remembered={p.pausedRememberPlayerMovement} " +
+                         $"transition={(p.currentTransition != null ? p.currentTransition.name : "-")}): turned it back on");
+            p.EnablePlayerMovement(true);
+        }
+        catch { /* best effort */ }
     }
 
     [HarmonyPatch(typeof(SessionData), nameof(SessionData.PauseGame))]

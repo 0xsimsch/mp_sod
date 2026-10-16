@@ -77,6 +77,11 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.26: walking again after closing the board
+
+- Report: the client couldn't walk (could still look, use and drag). `Player.OnPauseChange` (0x44D3D0) saves `fps.enableMovement` into `pausedRememberPlayerMovement` on pause and restores it on resume. In co-op the world runs behind the board, so a transition with movement off (searching the victim) finished while the board was open and turned movement on; closing the board then restored the saved "off". While the pause holds the movement, `EnablePlayerMovement` from anything else now only updates the saved value, so the resume applies it (single player's order). Logged as "movement turned on/off behind the menu".
+- Safety net: movement off for 3 s with no pause, menu, transition, seat/search/computer lock, dialog, phone, cutscene, hiding, vent, bed, KO or death is turned back on and logged ("nothing holding it").
+
 ## 0.9.24: menu footer offset cache measures once, never from its own writes
 
 - 0.9.19's per-launch "re-validation" measured the bar's distance to the column AFTER cached placement had already moved the bar - it measured our own write and stored that (log: cached bottom -4.9, then "updated" to -81.8), parking the footer ~80 px too low. Gaps are now determined ONCE per game run, always before the first placement, and final; a re-opened menu follows the run's gaps without re-measuring.
