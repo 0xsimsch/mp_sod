@@ -55,7 +55,11 @@ public static class CaseRecordSync
                 var c = panel.activeCases[i];
                 if (c == null || !_dirty.Contains(c.id)) continue;
                 var json = JsonUtility.ToJson(c);
-                if (_lastSent.TryGetValue(c.id, out var last) && last == json) continue;
+                if (_lastSent.TryGetValue(c.id, out var last) && last == json)
+                {
+                    if (!IsHost) Plugin.Event($"CASE board edit for {c.id} not sent: unchanged since our last send");
+                    continue;
+                }
                 _lastSent[c.id] = json;
                 send(json, panel.activeCase != null && panel.activeCase.id == c.id);
                 Sent++;
@@ -97,7 +101,19 @@ public static class CaseRecordSync
     static void BoardEdited(Case c = null)
     {
         _boardEdit = true;
-        try { MarkDirty(c ?? CasePanelController.Instance?.activeCase, Time.unscaledTime); }
+        try
+        {
+            c ??= CasePanelController.Instance?.activeCase;
+            if (!IsHost)
+            {
+                // Diagnostics (seen: the host never got a client's pins and the client logged nothing): say why an
+                // edit isn't queued, or that it is.
+                string skip = c == null ? "no active case" : _applying ? "while applying the host's record" :
+                              NetSession.Current == null ? "no session" : !Core.World.Ready ? "world not ready" : null;
+                Plugin.Event(skip != null ? $"CASE board edit not sent: {skip}" : $"CASE board edit on {c.id} \"{c.name}\" queued ({c.caseElements?.Count ?? 0} pins)");
+            }
+            MarkDirty(c, Time.unscaledTime);
+        }
         finally { _boardEdit = false; }
     }
 
