@@ -77,6 +77,11 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.19: menu header/footer lines follow the co-op buttons
+
+- The main/Esc menu's red header and footer lines (`EmbelishmentTop`/`EmbelishmentBottom`, siblings of the buttons in `MainMenuPanel`) sat at fixed spots, so our added Host/Join (and Invite/Leave) buttons pushed the button column past the footer into it. They now hug the visible column top/bottom on every canvas frame; a `Refresh` hides our own copies and measures the game's untouched column edge once, then re-places. Follows Host/Join ↔ Invite/Leave state changes. (Note: `topBarRend`/`bottomBarRend` are the screen-edge vignette gradients, *not* these lines.)
+- Offsets are cached in `PlayerPrefs` after a measured capture, so placement starts from frame one (no wrong-position flash) and a re-measurement silently updates them. See `analysis/MENU_RESULTS.md`.
+
 ## 0.9.14: switch resync after every client flip
 
 - Host: a client's switch flip is applied, then the switch's resulting state on the host goes to every client, the flipper included (instead of relaying the client's message to the others). A client whose flip didn't take on the host is set back to the host's state. Log on a mismatch: `ITEM switch #id …: P1 set it to X, the host has Y; resyncing`.

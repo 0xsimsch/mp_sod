@@ -27,6 +27,7 @@
     <Reference Include="$(InteropDir)/UnityEngine.AnimationModule.dll" Private="false" />
     <Reference Include="$(InteropDir)/UnityEngine.InputLegacyModule.dll" Private="false" />
     <Reference Include="$(InteropDir)/UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.UIModule.dll" Private="false" />
     <Reference Include="$(InteropDir)/UnityEngine.UI.dll" Private="false" />
     <Reference Include="$(InteropDir)/Unity.TextMeshPro.dll" Private="false" />
     <Reference Include="$(InteropDir)/UnityEngine.AudioModule.dll" Private="false" />
