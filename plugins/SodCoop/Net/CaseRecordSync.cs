@@ -156,6 +156,35 @@ public static class CaseRecordSync
     [HarmonyPatch(typeof(CasePanelController), nameof(CasePanelController.UnPinFromCasePanel))]
     static class Unpin { static void Postfix() => BoardEdited(); }
 
+    /// <summary>
+    /// A case the client's player makes on the board (the "new case" button; its ids come from the client's own range,
+    /// see <see cref="CaseIds"/>). Sent like a board edit; the host doesn't have it, so it adds it whole. Other
+    /// <c>CreateNewCase</c> callers (murder, side jobs, chapters) are the host's and aren't sent from here.
+    /// </summary>
+    [ThreadStatic] static bool _playerCase;
+
+    [HarmonyPatch(typeof(CasePanelController), nameof(CasePanelController.NewCustomCaseButton))]
+    static class NewCaseButton
+    {
+        static void Prefix() => _playerCase = true;
+        static void Postfix() => _playerCase = false;
+    }
+
+    [HarmonyPatch(typeof(CasePanelController), nameof(CasePanelController.CreateNewCase))]
+    static class NewCase
+    {
+        static void Postfix(Case __result)
+        {
+            if (!_playerCase || __result == null || IsHost) return;
+            Plugin.Event($"CASE created our own case {__result.id} \"{__result.name}\"");
+            BoardEdited(__result);
+        }
+    }
+
+    /// <summary>The name typed into the new-case popup.</summary>
+    [HarmonyPatch(typeof(CasePanelController), nameof(CasePanelController.OnCreateNewCustomCase))]
+    static class NewCaseNamed { static void Postfix() => BoardEdited(); }
+
     /// <summary>Hiding/showing a connection (stored in <c>Case.hiddenConnections</c>, merged by the host).</summary>
     [HarmonyPatch(typeof(Case), nameof(Case.SetHidden))]
     static class HideConnection { static void Postfix(Case __instance) => BoardEdited(__instance); }
