@@ -10,11 +10,16 @@ namespace SodCoop.Net;
 /// Objectives and case resolution are decided by the host (design: one shared case).
 /// <list type="bullet">
 /// <item><b>Objectives</b>: each machine evaluates triggers against its *own* player (<c>Objective.CheckingLoop</c> →
-///   <c>ObjectiveTrigger.Trigger</c> → <c>Objective.Complete</c>). <c>Complete</c> also runs the objective's effects
-///   (side job phase / hand-in via <c>SideJobController.SideJobObjectiveComplete</c>, ransom/cover-up steps on
-///   <c>MurderController</c>, <c>ChapterController.LoadPart</c>). A client therefore doesn't complete locally: it asks
-///   the host, which completes (effects included) and tells everyone; clients then run <c>Complete</c> for the UI with
-///   those effects suppressed.</item>
+///   <c>ObjectiveTrigger.Trigger</c> → progress → <c>Objective.Complete</c>). <c>Complete</c> also runs the objective's
+///   effects (side job phase / hand-in via <c>SideJobController.SideJobObjectiveComplete</c>, ransom/cover-up steps on
+///   <c>MurderController</c>, <c>ChapterController.LoadPart</c>). On a client, case objectives never progress or complete
+///   by themselves: a trigger the client's check finds met becomes a <i>fact</i> sent to the host ("trigger T of
+///   objective O is met for me"). The host checks it by trigger type (<see cref="Judge"/>): a location against where the
+///   client's body is on the host, a personal action (opened a file, used a computer…) taken on trust, and shared state
+///   (pins, evidence, case status…) never, because the host's own check sees it. Accepted facts run the host's own
+///   <c>Trigger</c>; the host then sends progress and completion, which clients apply with the effects suppressed.
+///   (Before 0.9.10 a client asked the host to complete the whole objective, and the host trusted it: a crime-scene
+///   objective that fired on the client while it set the case up removed the crime scene for everyone.)</item>
 /// <item><b>Hand-in</b>: <c>ActionController.HandInCase</c> triggers the case's submit objective (covered above). Before
 ///   that, a client sends its resolve answers (<c>Case.ResolveQuestion.input/inputtedEvidence</c>), so the host grades
 ///   what the client typed.</item>
@@ -32,8 +37,10 @@ public static class ObjectiveSync
     /// </summary>
     public const bool PayEveryone = true;
 
-    const byte KindTriggerRequest = 1; // client → host: int caseId, str objective name
+    // kind 1 (client asks the host to complete an objective) was retired with protocol v38
     const byte KindCompleted = 2;      // host → clients: int caseId, str name, byte byPlayer
+    const byte KindTriggerFact = 3;    // client → host: int caseId, str objective, str trigger name, int trigger type
+    const byte KindProgress = 4;       // host → clients: int caseId, str objective, float progress
     const byte KindAnswers = 1;        // (CaseResolve) client → host: int caseId, int n, n × (str name, str input, str evidence)
     const byte KindResolved = 2;       // (CaseResolve) host → clients: int caseId, byte byPlayer
 
@@ -41,9 +48,11 @@ public static class ObjectiveSync
     [ThreadStatic] static bool _applying;
     public static bool SuppressEffects => _applying;
 
-    /// <summary>Client: requests already sent (CheckingLoop keeps re-triggering until the host's answer arrives).</summary>
-    static readonly Dictionary<(int, string), float> _requested = new();
+    /// <summary>Client: facts already sent (CheckingLoop re-triggers every check until the host answers).</summary>
+    static readonly Dictionary<(int, string, string), float> _requested = new();
     const float RequestRepeat = 3f;
+    /// <summary>Client: direct completions dropped (not through a trigger), logged once per objective.</summary>
+    static readonly HashSet<(int, string)> _droppedLogged = new();
 
     /// <summary>Host: who caused the completion being run now (for the notification).</summary>
     [ThreadStatic] static byte _completingFor;
@@ -53,6 +62,8 @@ public static class ObjectiveSync
     const float ResolvedDelay = 1.5f;
 
     public static int Requests { get; private set; }
+    public static int FactsAccepted { get; private set; }
+    public static int FactsRejected { get; private set; }
     public static int Completed { get; private set; }
 
     static NetSession S => NetSession.Current;
@@ -95,24 +106,30 @@ public static class ObjectiveSync
     internal static void OnPacket(NetSession s, PeerId from, PlayerId? fromPlayer, byte type, byte[] data)
     {
         using var r = ExtraWire.Read(data, out var kind);
-        if (type == ExtraWire.Objective && kind == KindTriggerRequest && s.Role == NetSession.SessionRole.Host)
+        if (type == ExtraWire.Objective && kind == KindTriggerFact && s.Role == NetSession.SessionRole.Host)
+        {
+            int caseId = r.ReadInt32();
+            string objName = ExtraWire.Str(r), trigName = ExtraWire.Str(r);
+            int trigType = r.ReadInt32();
+            OnFact(fromPlayer, caseId, objName, trigName, trigType);
+        }
+        else if (type == ExtraWire.Objective && kind == KindProgress && s.Role == NetSession.SessionRole.Client)
         {
             int caseId = r.ReadInt32();
             string name = ExtraWire.Str(r);
+            float progress = r.ReadSingle();
             var obj = FindObjective(FindCase(caseId), name);
-            if (obj == null) { Plugin.Event($"OBJ {fromPlayer} completed '{name}' of case {caseId}, which the host doesn't have"); return; }
-            if (obj.isComplete) return;
-            Plugin.Event($"OBJ {fromPlayer} completed '{name}' of case {caseId}: completing it for everyone");
-            _completingFor = fromPlayer?.Value ?? 0;
-            try { obj.Complete(); } // host's postfix broadcasts
-            finally { _completingFor = 0; }
+            if (obj == null || obj.isComplete || obj.progress >= progress) return;
+            _applying = true;
+            try { obj.SetProgress(progress); }
+            catch (Exception e) { Plugin.Event($"OBJ applying progress of '{name}' failed: {e.Message}"); }
+            finally { _applying = false; }
         }
         else if (type == ExtraWire.Objective && kind == KindCompleted && s.Role == NetSession.SessionRole.Client)
         {
             int caseId = r.ReadInt32();
             string name = ExtraWire.Str(r);
             byte by = r.ReadByte();
-            _requested.Remove((caseId, name));
             var obj = FindObjective(FindCase(caseId), name);
             if (obj == null || obj.isComplete) return;
             _applying = true;
@@ -152,6 +169,152 @@ public static class ObjectiveSync
         }
     }
 
+    // ------------------------------------------------------------------ facts (host)
+
+    enum FactRule
+    {
+        /// <summary>Accepted if the client's body is there (or, for escape triggers, not there) on the host.</summary>
+        Location,
+        /// <summary>Something only the client's machine sees (UI, own inventory, a call…): taken on trust.</summary>
+        Trust,
+        /// <summary>Shared state the host's own check already sees (synced board, doors, switches, case status…).</summary>
+        HostOnly,
+    }
+
+    static FactRule RuleOf(Objective.ObjectiveTriggerType t)
+    {
+        switch (t)
+        {
+            case Objective.ObjectiveTriggerType.goToNode:
+            case Objective.ObjectiveTriggerType.goToRoom:
+            case Objective.ObjectiveTriggerType.goToAddress:
+            case Objective.ObjectiveTriggerType.goToPublicFacingAddress:
+            case Objective.ObjectiveTriggerType.exploreCrimeScene:
+            case Objective.ObjectiveTriggerType.escapeGameLocation:
+            case Objective.ObjectiveTriggerType.escapeBuilding:
+                return FactRule.Location;
+            case Objective.ObjectiveTriggerType.evidencePinned:          // board edits merge into the host's case
+            case Objective.ObjectiveTriggerType.switchStateTrue:         // switches flipped by players are synced
+            case Objective.ObjectiveTriggerType.switchStateFalse:
+            case Objective.ObjectiveTriggerType.switchStateTrueForType:
+            case Objective.ObjectiveTriggerType.roomLightOn:
+            case Objective.ObjectiveTriggerType.unlockDoor:              // door state is synced
+            case Objective.ObjectiveTriggerType.interactableRemoved:     // removals are reported to the host
+            case Objective.ObjectiveTriggerType.gamePaused:
+            case Objective.ObjectiveTriggerType.gameUnpaused:
+            case Objective.ObjectiveTriggerType.noMoreObjectives:
+            case Objective.ObjectiveTriggerType.successsfulSolve:
+            case Objective.ObjectiveTriggerType.submitCase:
+            case Objective.ObjectiveTriggerType.waitForCaseProcessing:
+            case Objective.ObjectiveTriggerType.onCompleteJob:
+            case Objective.ObjectiveTriggerType.ifValidRansomBriefcase:
+            case Objective.ObjectiveTriggerType.ifNoValidRansomBriefcase:
+            case Objective.ObjectiveTriggerType.kidnapperHasValidBriefcase:
+            case Objective.ObjectiveTriggerType.victimIsFreed:
+            case Objective.ObjectiveTriggerType.nothing:
+                return FactRule.HostOnly;
+            default:
+                return FactRule.Trust;
+        }
+    }
+
+    const float NodeRange = 3f;
+
+    /// <summary>Is the fact true for this player as far as the host can tell?</summary>
+    static bool Judge(Objective.ObjectiveTrigger t, NetPlayer player, out string why)
+    {
+        switch (RuleOf(t.triggerType))
+        {
+            case FactRule.HostOnly: why = "the host's own check decides this one"; return false;
+            case FactRule.Trust: why = "player action, taken on trust"; return true;
+        }
+        var body = player?.Body;
+        if (body == null) { why = "no body for that player here"; return false; }
+        bool inside;
+        string where;
+        if (t.triggerType == Objective.ObjectiveTriggerType.escapeBuilding)
+        {
+            var b = t.gameLocation?.building ?? t.room?.gameLocation?.building ?? t.node?.gameLocation?.building;
+            if (b == null) { why = "trigger has no building"; return false; }
+            inside = body.currentBuilding != null && body.currentBuilding.Pointer == b.Pointer;
+            where = $"building {b.name}";
+        }
+        else if (t.node != null)
+        {
+            inside = (body.currentNode != null && body.currentNode.Pointer == t.node.Pointer)
+                     || Vector3.Distance(body.transform.position, t.node.position) < NodeRange;
+            where = $"node {t.node.position}";
+        }
+        else if (t.room != null)
+        {
+            inside = body.currentRoom != null && body.currentRoom.Pointer == t.room.Pointer;
+            where = $"room {t.room.roomID}";
+        }
+        else if (t.gameLocation != null)
+        {
+            inside = body.currentGameLocation != null && body.currentGameLocation.Pointer == t.gameLocation.Pointer;
+            where = $"location {t.gameLocation.name}";
+        }
+        else { why = "trigger has no location (room/node/address) on the host"; return false; }
+        bool escape = t.triggerType is Objective.ObjectiveTriggerType.escapeGameLocation or Objective.ObjectiveTriggerType.escapeBuilding;
+        bool ok = escape ? !inside : inside;
+        string at = body.currentGameLocation != null ? body.currentGameLocation.name : "nowhere";
+        why = ok ? $"body is {(escape ? "out of" : "at")} {where}" : $"body is {(escape ? "still at" : "not at")} {where} (it is at {at})";
+        return ok;
+    }
+
+    static Objective.ObjectiveTrigger FindTrigger(Objective obj, string name, int type)
+    {
+        var list = obj?.queueElement?.triggers;
+        if (list == null) return null;
+        Objective.ObjectiveTrigger fallback = null;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var t = list[i];
+            if (t == null || (int)t.triggerType != type) continue;
+            if (t.name == name) return t;
+            fallback ??= t;
+        }
+        return fallback;
+    }
+
+    /// <summary>Host: rejected facts already logged, so a client re-sending every 3 s doesn't flood the log.</summary>
+    static readonly Dictionary<(int, string, string), float> _rejectLogged = new();
+
+    static void OnFact(PlayerId? from, int caseId, string objName, string trigName, int trigType)
+    {
+        var obj = FindObjective(FindCase(caseId), objName);
+        string what = $"'{objName}' / {(Objective.ObjectiveTriggerType)trigType} '{trigName}' of case {caseId}";
+        if (obj == null) { LogReject(caseId, objName, trigName, $"OBJ fact from {from}: {what}, which the host doesn't have"); return; }
+        if (obj.isComplete || obj.isCancelled) return;
+        var trig = FindTrigger(obj, trigName, trigType);
+        if (trig == null) { LogReject(caseId, objName, trigName, $"OBJ fact from {from}: {what}: no such trigger here"); return; }
+        if (trig.triggered) return;
+        NetPlayer player = null;
+        if (from != null) PlayerRegistry.TryGet(from.Value, out player);
+        if (!Judge(trig, player, out var why))
+        {
+            FactsRejected++;
+            LogReject(caseId, objName, trigName, $"OBJ fact from {from}: {what} rejected: {why}");
+            return;
+        }
+        FactsAccepted++;
+        Plugin.Event($"OBJ fact from {from}: {what} accepted ({why})");
+        _completingFor = from?.Value ?? 0;
+        try { trig.Trigger(false); } // progress → Complete; the postfixes tell the clients
+        catch (Exception e) { Plugin.Event($"OBJ triggering {what} failed: {e.Message}"); }
+        finally { _completingFor = 0; }
+    }
+
+    static void LogReject(int caseId, string objName, string trigName, string message)
+    {
+        var key = (caseId, objName, trigName);
+        float now = Time.unscaledTime;
+        if (_rejectLogged.TryGetValue(key, out var at) && now - at < 30f) return;
+        _rejectLogged[key] = now;
+        Plugin.Event(message);
+    }
+
     static Case.ResolveQuestion FindQuestion(Case c, string name)
     {
         var qs = c?.resolveQuestions;
@@ -174,6 +337,51 @@ public static class ObjectiveSync
 
     // ------------------------------------------------------------------ patches
 
+    /// <summary>
+    /// Client: a met trigger of a case objective becomes a fact for the host instead of progress here. Objectives
+    /// outside a case (tutorial) stay local.
+    /// </summary>
+    [HarmonyPatch(typeof(Objective.ObjectiveTrigger), nameof(Objective.ObjectiveTrigger.Trigger))]
+    static class TriggerPatch
+    {
+        static bool Prefix(Objective.ObjectiveTrigger __instance)
+        {
+            if (Retiring) return false;
+            if (!IsClient || _applying || !World.Ready) return true;
+            var objs = __instance.addedToObjectives;
+            if (objs == null || objs.Count == 0) return true;
+            bool inCase = false;
+            for (int i = 0; i < objs.Count; i++)
+            {
+                var o = objs[i];
+                var c = o?.thisCase;
+                if (c == null) continue;
+                inCase = true;
+                // Only the case copy we show: every host re-send builds a new copy, and the old one is an orphan.
+                if (o.isComplete || o.isCancelled || !IsCurrentCase(c)) continue;
+                SendFact(c.id, o.name, __instance);
+            }
+            return !inCase;
+        }
+    }
+
+    static void SendFact(int caseId, string objName, Objective.ObjectiveTrigger t)
+    {
+        string trigName = t.name ?? "";
+        var key = (caseId, objName, trigName);
+        float now = Time.unscaledTime;
+        if (_requested.TryGetValue(key, out var at) && now - at < RequestRepeat) return;
+        bool first = !_requested.ContainsKey(key);
+        _requested[key] = now;
+        int type = (int)t.triggerType;
+        S.SendExtra(ExtraWire.Write(ExtraWire.Objective, KindTriggerFact, w =>
+        {
+            w.Write(caseId); ExtraWire.Str(w, objName); ExtraWire.Str(w, trigName); w.Write(type);
+        }));
+        Requests++;
+        if (first) Plugin.Event($"OBJ '{objName}' of case {caseId}: {t.triggerType} '{trigName}' met here; told the host");
+    }
+
     [HarmonyPatch(typeof(Objective), nameof(Objective.Complete))]
     static class CompletePatch
     {
@@ -183,18 +391,11 @@ public static class ObjectiveSync
             if (!IsClient || _applying || !World.Ready) return true;
             var c = __instance.thisCase;
             if (c == null) return true; // not part of a case (tutorial etc.): local
-            // Only objectives of the case copy we currently show. An objective of a replaced copy (every host
-            // re-send builds a new one) is an orphan; forwarding it completed the host's real objective (seen: the
-            // crime-scene objective completed 1 s after the murder case arrived, so its location vanished).
-            if (!IsCurrentCase(c)) return false;
-            var key = (c.id, __instance.name);
-            float now = Time.unscaledTime;
-            if (_requested.TryGetValue(key, out var at) && now - at < RequestRepeat) return false;
-            _requested[key] = now;
-            S.SendExtra(ExtraWire.Write(ExtraWire.Objective, KindTriggerRequest, w => { w.Write(c.id); ExtraWire.Str(w, __instance.name); }));
-            Requests++;
-            Plugin.Event($"OBJ '{__instance.name}' of case {c.id} reached here; asking the host");
-            return false; // the host completes it (with its effects) and tells us
+            // Case objectives complete only on the host's word. Triggers go to the host as facts (TriggerPatch);
+            // anything completing an objective directly is dropped, and logged once so we learn about the path.
+            if (_droppedLogged.Add((c.id, __instance.name)))
+                Plugin.Event($"OBJ '{__instance.name}' of case {c.id} tried to complete here directly; left to the host");
+            return false;
         }
 
         static void Postfix(Objective __instance)
@@ -206,6 +407,27 @@ public static class ObjectiveSync
             S.SendExtra(ExtraWire.Write(ExtraWire.Objective, KindCompleted, w => { w.Write(caseId); ExtraWire.Str(w, name); w.Write(by); }));
             Completed++;
             if (by != 0) Notify.Show($"{Notify.NameOf(by)} completed an objective", InterfaceControls.Icon.star);
+        }
+    }
+
+    /// <summary>Case objectives' progress is the host's: clients only apply it, the host sends partial steps.</summary>
+    [HarmonyPatch(typeof(Objective), nameof(Objective.SetProgress))]
+    static class ProgressPatch
+    {
+        static bool Prefix(Objective __instance)
+        {
+            if (Retiring) return false;
+            return !IsClient || _applying || !World.Ready || __instance.thisCase == null;
+        }
+
+        static void Postfix(Objective __instance)
+        {
+            if (!IsHost || !World.Ready || __instance.thisCase == null || __instance.isComplete) return;
+            int caseId = __instance.thisCase.id;
+            string name = __instance.name;
+            float progress = __instance.progress;
+            if (progress <= 0f) return;
+            S.SendExtra(ExtraWire.Write(ExtraWire.Objective, KindProgress, w => { w.Write(caseId); ExtraWire.Str(w, name); w.Write(progress); }));
         }
     }
 

@@ -73,3 +73,5 @@ seconds since `MainMenuController.Start`. If it still freezes, add TRACE lines a
   either way. If the host ever accepts it, it removes the crime scene for everyone, the same failure 0.9.3 fixed.
   Maybe the trigger checks a condition that is already true on the client, or `SetupObjectives` runs the check
   loop at once.
+
+**0.9.10:** clients no longer complete objectives or ask the host to. They send facts, and the host checks location facts against the client's body (see `plugins/SodCoop/README.md`, 0.9.10). The premature 27 ms completion would now be a rejected fact ("body is not at …"). Still open: whether the host's own completion at the document pickup is the game's normal flow (check solo).

@@ -77,6 +77,17 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.10: objectives complete only on the host (protocol v38, untested in game)
+
+- A client's case objectives never progress or complete by themselves. When the client's own check finds a trigger met, it sends a **fact** to the host: case, objective, trigger name and type (`ObjectiveSync.TriggerPatch`, resent every 3 s while the condition holds).
+- The host judges each fact by trigger type (`ObjectiveSync.Judge`):
+  - **location** triggers (go to node/room/address, explore crime scene, escape location/building): accepted only if the client's body is there on the host;
+  - **shared state** (pins, switches, doors, removals, case status, ransom, pause): ignored, because the host's own check sees it;
+  - **everything else** (player actions the host can't see: opened a file, used a computer, a call, own inventory…): accepted on trust.
+- An accepted fact runs the host's own `Trigger`. The host sends progress (new) and completion, which clients apply with world effects suppressed.
+- Anything else that completes a case objective directly on a client is dropped and logged once (`tried to complete here directly`).
+- Log lines: client `OBJ … met here; told the host`, host `OBJ fact from P1: … accepted (…)` / `rejected: body is not at …`.
+
 ## 0.9.0: world systems and persistence (protocol v35, untested in game)
 
 - `Net/ElevatorSync.cs` (msg 48): elevators keyed by bottom tile id; client button presses go to the host; host calls replayed and car state streamed near remote players.
