@@ -28,8 +28,8 @@ static class Program
         Check(th.Kind == ItemEventKind.Throw && th.Id == 5 && th.Velocity.Z == 3 && th.Spin.X == 4, "Item throw round trip");
         var mv = Protocol.ReadItem(Protocol.Item(new ItemMsg { Kind = ItemEventKind.Move, Id = 6 }));
         Check(mv.Kind == ItemEventKind.Move && mv.Id == 6, "Item move round trip (no throw fields)");
-        var pz = Protocol.ReadPose(Protocol.Pose(new PoseMsg { PlayerId = 2, Seq = 9, Yaw = 10f, Pitch = -20f, LookYaw = 33f, HeldId = 1234, Held = HeldKind.Carried }));
-        Check(pz.PlayerId == 2 && pz.Seq == 9 && pz.Pitch == -20f && pz.LookYaw == 33f && pz.HeldId == 1234 && pz.Held == HeldKind.Carried, "Pose round trip with look and held item");
+        var pz = Protocol.ReadPose(Protocol.Pose(new PoseMsg { PlayerId = 2, Seq = 9, Yaw = 10f, Pitch = -20f, LookYaw = 33f, HeldId = 1234, Held = HeldKind.Carried, Swings = 0x85 }));
+        Check(pz.PlayerId == 2 && pz.Seq == 9 && pz.Pitch == -20f && pz.LookYaw == 33f && pz.HeldId == 1234 && pz.Held == HeldKind.Carried && pz.Swings == 0x85, "Pose round trip with look, held item and swings");
         var cd = Protocol.ReadDamage(Protocol.CitizenDamage(new DamageMsg { PlayerId = 1, Amount = 0.5f, AttackerHumanId = 79 }));
         Check(cd.PlayerId == 1 && cd.AttackerHumanId == 79 && Math.Abs(cd.Amount - 0.5f) < 1e-6, "CitizenDamage round trip");
 
@@ -40,7 +40,7 @@ static class Program
         var poseBytes = Protocol.Pose(poseIn);
         var p = Protocol.ReadPose(poseBytes);
         Check(p.PlayerId == 1 && p.Seq == 65535 && p.Time == 12.5f && p.Position.Y == 2 && p.Yaw == 270f && p.Flags == (PoseFlags.Running | PoseFlags.Moving), "Pose round trip");
-        Check(poseBytes.Length == 3 + 1 + 2 + 4 + 12 + 4 + 4 + 1 + 4 + 4 + 1 + 1, $"Pose size is 41 bytes (got {poseBytes.Length})");
+        Check(poseBytes.Length == 3 + 1 + 2 + 4 + 12 + 4 + 4 + 1 + 4 + 4 + 1 + 1 + 1, $"Pose size is 42 bytes (got {poseBytes.Length})");
 
         var d = Protocol.ReadDamage(Protocol.Damage(new DamageMsg { PlayerId = 1, Amount = 0.2f, AttackerHumanId = 237, Position = new Vec3(4, 5, 6), Direction = new Vec3(0, 0, 1) }));
         Check(d.AttackerHumanId == 237 && d.Amount == 0.2f && d.Direction.Z == 1, "Damage round trip");

@@ -78,6 +78,7 @@ public sealed class RemotePlayerBody
         owner.RemoteBody = body;
         PlayerRegistry.BindRemoteBody(owner, donor);
         Plugin.Event($"{owner} possessed citizen {donor.humanID} \"{donor.citizenName}\"");
+        Plugin.Event($"{owner} body outfit at possess: {body.OutfitStatus()}");
         return body;
     }
 
@@ -86,6 +87,8 @@ public sealed class RemotePlayerBody
     /// Visibility is only re-evaluated on a room change, and <c>SetVisible</c> early-outs on an unchanged value,
     /// so a body possessed while its room was hidden could stay invisible; force it when its room is shown.
     /// </summary>
+    string _lastOutfitStatus;
+
     void KeepShown()
     {
         try
@@ -98,6 +101,8 @@ public sealed class RemotePlayerBody
             if (Hidden) { if (Human.visible) Human.SetVisible(false, true); }
             else if (!Human.visible && dist < 80f) Human.SetVisible(true, true);
             _marker.Ensure(Human, Owner.Id.Value);
+            var outfit = OutfitStatus();
+            if (outfit != _lastOutfitStatus) { _lastOutfitStatus = outfit; Plugin.Event($"{Owner} body outfit: {outfit}, {dist:F0} m, visible={Human.visible}"); }
         }
         catch (System.Exception e) { Plugin.Event($"body visibility guard for {Owner} failed: {e.Message}"); }
     }
@@ -139,6 +144,38 @@ public sealed class RemotePlayerBody
     bool _phoneShown;
 
     public void SetActivity(Net.PlayerActivity a) => _activity = a;
+
+    // --- punches and weapon swings (a counter in every pose, so a lost packet doesn't lose the swing)
+
+    const float CombatHold = 1.5f;
+    int _swings = -1;
+    float _combatUntil;
+    bool _combatShown;
+
+    public void SetSwings(byte s)
+    {
+        if (_swings < 0 || Human == null || Human.WasCollected) { _swings = s & 0x7F; return; } // first pose: nothing to replay
+        if ((s & 0x7F) == _swings) return;
+        _swings = s & 0x7F;
+        if (KnockedOut || Hidden) return;
+        var anim = Human.animationController;
+        if (anim == null) return;
+        try
+        {
+            if (!_combatShown) { anim.SetInCombat(true); _combatShown = true; }
+            anim.AttackTrigger();
+            _combatUntil = Time.time + CombatHold;
+        }
+        catch (System.Exception e) { Plugin.Event($"{Owner} swing failed: {e.Message}"); }
+    }
+
+    /// <summary>Drop the fighting stance a moment after the last swing.</summary>
+    void UpdateCombat()
+    {
+        if (!_combatShown || Time.time < _combatUntil) return;
+        _combatShown = false;
+        Human.animationController?.SetInCombat(false);
+    }
 
     /// <summary>Arms and idle for what the partner is doing (activity first, else what's in their hands).</summary>
     void UpdateActivity()
@@ -408,7 +445,27 @@ public sealed class RemotePlayerBody
         var cam = Camera.main;
         float dist = cam != null ? Vector3.Distance(cam.transform.position, Human.transform.position) : -1f;
         var room = Human.currentRoom;
-        return $"citizen {Human.humanID}, {dist:F0} m, visible={Human.visible}, room {(room != null ? room.roomID.ToString() : "-")}, map marker={_marker.Status}";
+        return $"citizen {Human.humanID}, {dist:F0} m, visible={Human.visible}, room {(room != null ? room.roomID.ToString() : "-")}, map marker={_marker.Status}\n" +
+               $"    outfit: {OutfitStatus()}";
+    }
+
+    /// <summary>Diagnostics for bodies seen with only head, hands and feet: is the outfit loaded, how many meshes render.</summary>
+    public string OutfitStatus()
+    {
+        try
+        {
+            var oc = Human.outfitController;
+            string outfit = oc == null ? "no controller" : $"current={oc.currentOutfit} loaded={oc.loadedOutfit}";
+            int on = 0, total = 0, skinOn = 0, skinTotal = 0;
+            foreach (var r in Human.GetComponentsInChildren<Renderer>(true))
+            {
+                bool shown = r.enabled && r.gameObject.activeInHierarchy;
+                total++; if (shown) on++;
+                if (r.TryCast<SkinnedMeshRenderer>() != null) { skinTotal++; if (shown) skinOn++; }
+            }
+            return $"{outfit}, renderers {on}/{total}, skinned {skinOn}/{skinTotal}";
+        }
+        catch (System.Exception e) { return $"? ({e.Message})"; }
     }
 
     public bool Stale => Human == null || Human.WasCollected || Generation != Core.World.Generation;
@@ -424,6 +481,7 @@ public sealed class RemotePlayerBody
             _nextVisibilityGuard = now + 0.5f;
             KeepShown();
         }
+        UpdateCombat();
         if (KnockedOut) return;
         if (PoseSource != null && PoseSource.TryGetPose(now, out var pose)) Apply(pose);
         // Perception is the host's job; on a client the body is only shown.

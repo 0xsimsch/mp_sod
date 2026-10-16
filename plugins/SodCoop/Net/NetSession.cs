@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.4";
+    public const string ModVersion = "0.9.5";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -447,6 +447,7 @@ public sealed class NetSession : IDisposable
         if (items != null && items.flashlight) msg.Flags |= PoseFlags.PlayerFlashlight;
         msg.Flags |= SeatedFlags(p, msg.Position.Y);
         msg.Activity = ActivityOf(p);
+        msg.Swings = Patches.SwingCapture.Swings;
         var cam = p.cam != null && p.cam.cam != null ? p.cam.cam.transform : Camera.main != null ? Camera.main.transform : null;
         if (cam != null)
         {
@@ -794,6 +795,7 @@ public sealed class NetSession : IDisposable
         player?.RemoteBody?.SetLookAndHeld(m.Pitch, m.LookYaw, m.HeldId, m.Held);
         player?.RemoteBody?.SetPlayerFlags(m.Flags);
         player?.RemoteBody?.SetActivity(m.Activity);
+        player?.RemoteBody?.SetSwings(m.Swings);
         if (player?.RemoteBody?.PoseSource is NetworkPoseSource src)
             src.Push(new PlayerPose
             {

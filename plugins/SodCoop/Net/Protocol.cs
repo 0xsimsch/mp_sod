@@ -174,6 +174,8 @@ public struct PoseMsg
     public HeldKind Held;
     /// <summary>What the player is doing with its hands/body (shown with the nearest citizen animation).</summary>
     public PlayerActivity Activity;
+    /// <summary>Punches/weapon swings so far: low 7 bits count (wrapping), bit 7 = the last one was with a weapon.</summary>
+    public byte Swings;
 }
 
 public enum PlayerActivity : byte
@@ -379,7 +381,7 @@ public struct ForensicMsg
 public static class Protocol
 {
     /// <summary>Bump on any wire change. Hosts reject other versions in the handshake.</summary>
-    public const ushort Version = 36;
+    public const ushort Version = 37;
     const ushort Magic = 0x4D53; // "SM"
 
     public static byte[] Hello(HelloMsg m) => Write(MsgType.Hello, w =>
@@ -403,6 +405,7 @@ public static class Protocol
             w.Write(copy.PlayerId); w.Write(copy.Seq); w.Write(copy.Time);
             V(w, copy.Position); w.Write(copy.Yaw); w.Write(copy.Pitch); w.Write((byte)copy.Flags);
             w.Write(copy.LookYaw); w.Write(copy.HeldId); w.Write((byte)copy.Held); w.Write((byte)copy.Activity);
+            w.Write(copy.Swings);
         });
     }
 
@@ -665,6 +668,7 @@ public static class Protocol
         PlayerId = r.ReadByte(), Seq = r.ReadUInt16(), Time = r.ReadSingle(), Position = V(r),
         Yaw = r.ReadSingle(), Pitch = r.ReadSingle(), Flags = (PoseFlags)r.ReadByte(),
         LookYaw = r.ReadSingle(), HeldId = r.ReadInt32(), Held = (HeldKind)r.ReadByte(), Activity = (PlayerActivity)r.ReadByte(),
+        Swings = r.ReadByte(),
     });
 
     public static IllegalActionMsg ReadIllegalAction(byte[] d) => Read(d, r => new IllegalActionMsg
