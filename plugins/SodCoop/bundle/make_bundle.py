@@ -72,7 +72,10 @@ def mod_version():
 
 def main():
     dll = os.path.join(PLUGIN_DIR, "bin", "Release", "net6.0", "SodCoop.dll")
-    for need in [dll, os.path.join(game, "winhttp.dll"), os.path.join(game, "BepInEx", "interop", "Assembly-CSharp.dll")]:
+    needs = [dll, os.path.join(game, "winhttp.dll"), os.path.join(game, "BepInEx", "core", "BepInEx.Core.dll")]
+    if with_interop:
+        needs.append(os.path.join(game, "BepInEx", "interop", "Assembly-CSharp.dll"))
+    for need in needs:
         if not os.path.exists(need):
             sys.exit(f"missing {need} (build the plugin / start the game once with BepInEx first)")
 

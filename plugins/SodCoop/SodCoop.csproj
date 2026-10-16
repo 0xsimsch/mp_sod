@@ -8,6 +8,8 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <!-- Game install; override with -p:GameDir=... -->
     <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Shadows of Doubt</GameDir>
+    <!-- Game types to compile against. CI uses the stripped copies in lib/refs: -p:InteropDir=../../lib/refs -->
+    <InteropDir Condition="'$(InteropDir)' == ''">$(GameDir)/BepInEx/interop</InteropDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,21 +17,21 @@
     <Reference Include="$(GameDir)/BepInEx/core/BepInEx.Unity.IL2CPP.dll" Private="false" />
     <Reference Include="$(GameDir)/BepInEx/core/Il2CppInterop.Runtime.dll" Private="false" />
     <Reference Include="$(GameDir)/BepInEx/core/0Harmony.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/Assembly-CSharp.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/Il2Cppmscorlib.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/Il2CppSystem.Core.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.JSONSerializeModule.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.CoreModule.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.PhysicsModule.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.AnimationModule.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.InputLegacyModule.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.IMGUIModule.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.UI.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/Unity.TextMeshPro.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.AudioModule.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/UnityEngine.TextRenderingModule.dll" Private="false" />
-    <Reference Include="$(GameDir)/BepInEx/interop/com.rlabrecque.steamworks.net.dll" Private="false" />
+    <Reference Include="$(InteropDir)/Assembly-CSharp.dll" Private="false" />
+    <Reference Include="$(InteropDir)/Il2Cppmscorlib.dll" Private="false" />
+    <Reference Include="$(InteropDir)/Il2CppSystem.Core.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.JSONSerializeModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.PhysicsModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.AnimationModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.InputLegacyModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.UI.dll" Private="false" />
+    <Reference Include="$(InteropDir)/Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.AudioModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)/com.rlabrecque.steamworks.net.dll" Private="false" />
   </ItemGroup>
 
   <!-- -p:CopyToGame=false (CI) only builds, without touching a game folder -->

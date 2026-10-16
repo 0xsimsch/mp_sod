@@ -4,7 +4,7 @@ An unofficial two-player co-op mod for [Shadows of Doubt](https://store.steampow
 
 **Status: early test build.** Many systems are synced, but most were never tested in a real two-player session. Expect rough edges.
 
-Not affiliated with ColePowered Games or Fireshine Games. This repository contains no game files or decompiled game code.
+Not affiliated with ColePowered Games or Fireshine Games. This repository contains no game files or decompiled game code. `lib/refs` holds stripped reference copies of the game's BepInEx interop assemblies (type and method signatures only, every method body removed), so the mod can be compiled without a game install.
 
 ## What is synced
 
@@ -41,13 +41,13 @@ cd ../SodCoop.Tests && dotnet run   # protocol and transport tests, no game need
 
 `.github/workflows/release.yml` builds the mod, runs the tests and packages the zip on GitHub. Pushing a tag `vX.Y.Z` that matches `ModVersion` in `plugins/SodCoop/Net/NetSession.cs` publishes a GitHub release with the zip. Running the workflow by hand only uploads the zip as a build artifact.
 
-The build needs the game's interop DLLs, which are generated from the game's code and can't be in a public repository. One-time setup:
+It compiles against `lib/refs`, so it needs no game install and no secrets. When the game updates, or `SodCoop.csproj` gets a new game reference, regenerate the references and commit them:
 
-1. `python3 -I plugins/SodCoop/bundle/make_refs.py` writes `dist/sodcoop-game-refs.zip` (about 5 MB).
-2. Upload it somewhere private that gives a direct download URL.
-3. Store that URL as the repository secret `GAME_REFS_URL`. If the URL needs authentication, also set `GAME_REFS_TOKEN`; it is sent as a Bearer token.
+```
+python3 -I plugins/SodCoop/bundle/make_refs.py   # strips the game's interop DLLs into lib/refs (plugins/RefStrip, Mono.Cecil)
+```
 
-Repeat this when the game updates.
+To build locally without the game installed: `dotnet build plugins/SodCoop -c Release -p:InteropDir=$PWD/lib/refs -p:CopyToGame=false`. You also need BepInEx's core DLLs, set with `-p:GameDir=`.
 
 ## Repository layout
 
@@ -55,6 +55,8 @@ Repeat this when the game updates.
 |---|---|
 | `plugins/SodCoop/` | the mod. `Net/` holds the session, transports and one `*Sync.cs` per game system; `Patches/` holds Harmony patches; `Puppet/` holds remote player bodies. Development log: [`README.md`](plugins/SodCoop/README.md) |
 | `plugins/SodCoop.Tests/` | console tests for the wire protocol and the UDP transport |
+| `plugins/RefStrip/` | strips method bodies from assemblies, used to make `lib/refs` |
+| `lib/refs/` | stripped game references for building without the game |
 | `plugins/SodProbe/` | the measurement plugin used for the early feasibility tests |
 | `analysis/` | design notes, research results, and tools: a disassembly helper, fake UDP host/client, and a game driver for unattended tests on Linux |
 | `determinism_test/`, `probe_results/` | results of the early tests (city generation determinism, AI tick rate, room loading) |

@@ -2,9 +2,8 @@
 # Push a tag vX.Y.Z (matching ModVersion in NetSession.cs) to publish a GitHub release with the zip;
 # "Run workflow" by hand only uploads the zip as a build artifact.
 #
-# Needs the repository secret GAME_REFS_URL: a direct download URL of the zip made by
-# plugins/SodCoop/bundle/make_refs.py (the game's interop DLLs, which can't be in a public repository).
-# Optional GAME_REFS_TOKEN is sent as a Bearer token, for a URL that needs authentication.
+# Compiles against lib/refs (stripped game references, see plugins/SodCoop/bundle/make_refs.py), so no
+# game install or secret is needed.
 name: release
 
 on:
@@ -38,28 +37,18 @@ jobs:
             echo "::error::tag $GITHUB_REF_NAME but ModVersion is $version"; exit 1
           fi
 
-      - name: Fetch BepInEx and the game references
-        env:
-          GAME_REFS_URL: ${{ secrets.GAME_REFS_URL }}
-          GAME_REFS_TOKEN: ${{ secrets.GAME_REFS_TOKEN }}
+      - name: Fetch BepInEx
         run: |
-          if [ -z "$GAME_REFS_URL" ]; then
-            echo "::error::secret GAME_REFS_URL is not set (see plugins/SodCoop/bundle/make_refs.py)"; exit 1
-          fi
-          mkdir -p "$GAME_DIR/BepInEx/interop"
+          mkdir -p "$GAME_DIR"
           curl -fsSL -o bepinex.zip "$BEPINEX_URL"
           unzip -q bepinex.zip -d "$GAME_DIR"
-          auth=()
-          if [ -n "$GAME_REFS_TOKEN" ]; then auth=(-H "Authorization: Bearer $GAME_REFS_TOKEN" -H "Accept: application/octet-stream"); fi
-          curl -fsSL "${auth[@]}" -o refs.zip "$GAME_REFS_URL"
-          unzip -q refs.zip -d "$GAME_DIR/BepInEx/interop"
-          rm bepinex.zip refs.zip
+          rm bepinex.zip
 
       - name: Test
         run: dotnet run --project plugins/SodCoop.Tests
 
       - name: Build
-        run: dotnet build plugins/SodCoop -c Release -p:GameDir="$GAME_DIR" -p:CopyToGame=false
+        run: dotnet build plugins/SodCoop -c Release -p:GameDir="$GAME_DIR" -p:InteropDir="$GITHUB_WORKSPACE/lib/refs" -p:CopyToGame=false
 
       - name: Package
         run: python3 -I plugins/SodCoop/bundle/make_bundle.py "$GAME_DIR" dist
