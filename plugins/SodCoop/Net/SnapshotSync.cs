@@ -10,8 +10,8 @@ namespace SodCoop.Net;
 /// (<c>SaveStateController.CaptureSaveStateAsync</c>: ~0.23 s, ~1 MB, no pause) and streams it in 16 KB
 /// chunks. The client reassembles it, checks size and hash, and writes it to its saves folder as
 /// "MP Join.sodb", next to the player's own saves and never over them. Loading it is then the game's own
-/// Load → Start (the newest save is preselected). TODO: start the load automatically and keep the
-/// client's own player state (per-player inventory/money by design).
+/// loaded automatically (see <see cref="LoadJoinSave"/>), and the client's own money and inventory are kept
+/// through <see cref="Profiles"/>.
 /// </summary>
 public static class SnapshotSync
 {

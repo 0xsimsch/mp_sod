@@ -1,6 +1,6 @@
 # What still needs syncing: priority list (2026-10-13)
 
-**Status at 0.7.0:** P0 1–7 and P1 8–18 are implemented but untested in game (see plugins/SodCoop/README.md, "0.7.0"). Not done: P2 and P3. Pending decisions: see the end of this file (0.7.0 defaults to paying every player the full reward).
+**Status at 0.9.4:** P0 1–7, P1 8–18 and P2 19–25 are implemented; per-player profiles (26) too. Story mode (30) only shows a warning. Not done: 27–29, 31. Almost all of it is untested in a real two-player session. Decisions still on defaults: see the end of this file (every player gets the full reward).
 
 Source: a scan of the decompiled game in four areas (player actions and crime, citizen behaviour, world, progression and UI), checked against the mod's code at 0.6.3. None of it is tested in game. "Breakage" is inferred from what the code does and doesn't sync. Effort: S = hours, M = about a day, L = several days.
 

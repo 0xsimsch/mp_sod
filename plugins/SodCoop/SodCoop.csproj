@@ -32,7 +32,8 @@
     <Reference Include="$(GameDir)/BepInEx/interop/com.rlabrecque.steamworks.net.dll" Private="false" />
   </ItemGroup>
 
-  <Target Name="CopyToPlugins" AfterTargets="Build">
+  <!-- -p:CopyToGame=false (CI) only builds, without touching a game folder -->
+  <Target Name="CopyToPlugins" AfterTargets="Build" Condition="'$(CopyToGame)' != 'false'">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)/BepInEx/plugins" />
   </Target>
 

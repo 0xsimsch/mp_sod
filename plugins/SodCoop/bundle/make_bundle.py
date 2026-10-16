@@ -26,7 +26,14 @@ out_dir = args[1] if len(args) > 1 else os.path.join(REPO, "dist")
 # Game-folder files and folders that make up BepInEx (doorstop loader, .NET runtime, BepInEx itself).
 TOP_FILES = ["winhttp.dll", "doorstop_config.ini", ".doorstop_version", "changelog.txt"]
 TOP_DIRS = ["dotnet"]
+# unity-libs is downloaded by BepInEx on the first start; it is shipped only if the game folder has it.
 BEPINEX_DIRS = ["core", "unity-libs", "patchers"]  # not: plugins (only ours), cache, logs, config (ours); interop on request
+
+BEPINEX_CFG = """[Logging.Console]
+
+## No extra console window next to the game.
+Enabled = false
+"""
 
 CONFIG = """## SodCoop (mp_sod) settings. F11 in game uses [Net] Mode.
 
@@ -92,7 +99,8 @@ def main():
                 for f in files:
                     p = os.path.join(dirpath, f)
                     add(p, os.path.relpath(p, game))
-        add(os.path.join(game, "BepInEx", "config", "BepInEx.cfg"), "BepInEx/config/BepInEx.cfg")
+        # Only the settings that differ from BepInEx's defaults; BepInEx fills in the rest on the first start.
+        z.writestr("BepInEx/config/BepInEx.cfg", BEPINEX_CFG)
         z.writestr("BepInEx/config/mp_sod.coop.cfg", CONFIG)
         add(dll, "BepInEx/plugins/SodCoop.dll")
         add(os.path.join(HERE, "FRIEND_README.txt"), "SodCoop-README.txt")

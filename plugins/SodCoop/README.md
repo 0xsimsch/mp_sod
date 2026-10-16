@@ -1,4 +1,8 @@
-# SodCoop: co-op prototype (step 1: second player as a separate body)
+# SodCoop: development notes
+
+This file is the development log, oldest steps first, newest versions in the dated sections. For an overview, install and build steps see the [README](../../README.md) at the top of the repository.
+
+## Step 1: second player as a separate body
 
 Goal of this step: answer **"if the host has a second body flagged `isPlayer`, does the game's own perception/crime code treat it like a player?"** (from `analysis/A3_RESULTS.md`). No networking yet. The second player is faked by replaying your own movement.
 
@@ -277,7 +281,7 @@ What a failure would tell us:
 
 ## Build
 
-Unit tests for the protocol and UDP transport (no game needed): `cd plugins/SodCoop.Tests && nix shell nixpkgs#dotnet-sdk_8 -c dotnet run` (31 checks).
+Unit tests for the protocol and UDP transport (no game needed): `cd plugins/SodCoop.Tests && nix shell nixpkgs#dotnet-sdk_8 -c dotnet run` (39 checks).
 
 ```
 nix shell nixpkgs#dotnet-sdk_8 -c dotnet build -c Release   # copies SodCoop.dll into BepInEx/plugins

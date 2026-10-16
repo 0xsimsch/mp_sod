@@ -1,0 +1,76 @@
+# Builds SodCoop and the ready-to-unzip package (BepInEx + SodCoop.dll + config + README).
+# Push a tag vX.Y.Z (matching ModVersion in NetSession.cs) to publish a GitHub release with the zip;
+# "Run workflow" by hand only uploads the zip as a build artifact.
+#
+# Needs the repository secret GAME_REFS_URL: a direct download URL of the zip made by
+# plugins/SodCoop/bundle/make_refs.py (the game's interop DLLs, which can't be in a public repository).
+# Optional GAME_REFS_TOKEN is sent as a Bearer token, for a URL that needs authentication.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # BepInEx 6 IL2CPP bleeding-edge build the mod is developed against
+  BEPINEX_URL: https://builds.bepinex.dev/projects/bepinex_be/788/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.788%2B5b766a3.zip
+  GAME_DIR: ${{ github.workspace }}/game
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Check the tag matches the mod version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(grep -oP 'ModVersion = "\K[^"]+' plugins/SodCoop/Net/NetSession.cs)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME but ModVersion is $version"; exit 1
+          fi
+
+      - name: Fetch BepInEx and the game references
+        env:
+          GAME_REFS_URL: ${{ secrets.GAME_REFS_URL }}
+          GAME_REFS_TOKEN: ${{ secrets.GAME_REFS_TOKEN }}
+        run: |
+          if [ -z "$GAME_REFS_URL" ]; then
+            echo "::error::secret GAME_REFS_URL is not set (see plugins/SodCoop/bundle/make_refs.py)"; exit 1
+          fi
+          mkdir -p "$GAME_DIR/BepInEx/interop"
+          curl -fsSL -o bepinex.zip "$BEPINEX_URL"
+          unzip -q bepinex.zip -d "$GAME_DIR"
+          auth=()
+          if [ -n "$GAME_REFS_TOKEN" ]; then auth=(-H "Authorization: Bearer $GAME_REFS_TOKEN" -H "Accept: application/octet-stream"); fi
+          curl -fsSL "${auth[@]}" -o refs.zip "$GAME_REFS_URL"
+          unzip -q refs.zip -d "$GAME_DIR/BepInEx/interop"
+          rm bepinex.zip refs.zip
+
+      - name: Test
+        run: dotnet run --project plugins/SodCoop.Tests
+
+      - name: Build
+        run: dotnet build plugins/SodCoop -c Release -p:GameDir="$GAME_DIR" -p:CopyToGame=false
+
+      - name: Package
+        run: python3 -I plugins/SodCoop/bundle/make_bundle.py "$GAME_DIR" dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SodCoop
+          path: dist/*.zip
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --title "SodCoop ${GITHUB_REF_NAME#v}" --generate-notes
