@@ -109,36 +109,42 @@ static class CoopMenu
             if (e.Button.gameObject.activeSelf != vis) e.Button.gameObject.SetActive(vis);
             if (vis) { e.Button.SetInteractable(e.Enabled()); SetLabel(e); }
         }
-        TryCaptureBars(); // every 30 frames via the menu step; no-op once this launch's offsets are validated
+        TryCaptureBars(); // every 30 frames via the menu step; no-op once this game run has its gaps
     }
 
-    const string GapTopKey = "sodcoop.menuGapTop", GapBottomKey = "sodcoop.menuGapBottom"; // cached between game runs
-    static bool _validated; // this launch's measurement accepted (even when placement already runs from cache)
+    const string GapTopKey = "sodcoop.menuGapTop.v2", GapBottomKey = "sodcoop.menuGapBottom.v2", GapResKey = "sodcoop.menuGapRes"; // cached between game runs
+    static bool _haveGaps; // measured or loaded this game run - final, see CaptureBars
 
     /// <summary>Measures the bar offsets against the game's own buttons (our copies excluded, so capture can
-    /// also succeed later than Build).</summary>
+    /// also succeed later than Build). Gaps are determined ONCE per game run and then never re-derived: after
+    /// our own placement has moved the bars even once, a new reading measures our writes instead of the game's
+    /// resting spots - a re-measure on top of cached placement poisoned the cache in 0.9.19/0.9.20 (log:
+    /// "use cached offsets: bottom -4.9" followed by "updated: bottom -81.8", footer visibly too low).</summary>
     static void CaptureBars(MainMenuController menu, ButtonController template)
     {
-        _barsHome = false;
-        _validated = false;
-        _barFailLogged = false;
-        _pendTop = float.NaN; _pendBottom = float.NaN; _pendCount = -1; _streak = 0;
         // Not "transform.parent as RectTransform": the interop wrapper of parent is typed Transform and the
         // cast would fail even though it is one. GetComponent finds the real RectTransform.
         var parent = template.transform.parent;
         _row = parent == null ? null : parent.GetComponent<RectTransform>();
         _embelTop = FindChild(_row, "EmbelishmentTop");
         _embelBottom = FindChild(_row, "EmbelishmentBottom");
-        // The gaps are constants for a given game version and canvas setup, so placement may start from the
-        // cached values on frame one (no wrong-position phase); TryCaptureBars below still runs and refreshes
-        // the cache whenever its own measurement says they changed.
-        if ((_embelTop != null || _embelBottom != null) && PlayerPrefs.HasKey(GapTopKey) && PlayerPrefs.HasKey(GapBottomKey))
+        _barFailLogged = false;
+        if (_haveGaps) { _barsHome = true; return; } // re-opened menu: follow from the run's gaps, don't re-measure
+        _barsHome = false;
+        _pendTop = float.NaN; _pendBottom = float.NaN; _pendCount = -1; _streak = 0;
+        // The gaps are constants for a given game version and resolution, so placement may start from the
+        // cached values on frame one (no wrong-position phase). A resolution change misses the guard and the
+        // fresh measurement runs again - before any placement, so the bar being measured is still untouched.
+        var res = $"{Screen.width}x{Screen.height}";
+        if ((_embelTop != null || _embelBottom != null) && PlayerPrefs.HasKey(GapTopKey) && PlayerPrefs.HasKey(GapBottomKey)
+            && PlayerPrefs.GetString(GapResKey, "") == res)
         {
             _topGap = PlayerPrefs.GetFloat(GapTopKey);
             _bottomGap = PlayerPrefs.GetFloat(GapBottomKey);
             if (!float.IsNaN(_topGap) && !float.IsNaN(_bottomGap))
             {
                 _barsHome = true;
+                _haveGaps = true;
                 Plugin.Event($"MENU bars use cached offsets: top {_topGap:F1} / bottom {_bottomGap:F1}");
             }
         }
@@ -168,13 +174,14 @@ static class CoopMenu
 
     static bool _placedLogged;
 
-    /// <summary>Retried from every Refresh until accepted. The game plays its buttons in one by one when the
-    /// menu opens, so the offsets are only accepted once a streak of >= 3 identical samples spanning >= 0.6 s
-    /// says the layout has settled - at any frame rate. Also runs when placement started from the cache, to
-    /// verify and refresh it.</summary>
+    /// <summary>Retried from every Refresh until accepted; never runs again once this game run has its gaps.
+    /// The game plays its buttons in one by one when the menu opens, so the offsets are only accepted once a
+    /// streak of >= 3 identical samples spanning >= 0.6 s says the layout has settled - at any frame rate.
+    /// Only ever measures BEFORE the first placement (see CaptureBars), so the bar it measures is still on the
+    /// game's own resting spot.</summary>
     static void TryCaptureBars()
     {
-        if (_validated || _template == null || _template.WasCollected) return;
+        if (_haveGaps || _template == null || _template.WasCollected) return;
         if (_row == null) { FailOnce("MENU bar capture failed: no RectTransform row above Load Game"); return; }
         if (!_row.gameObject.activeInHierarchy) return; // menu closed or another panel is up: wait
         if (_embelTop == null || _embelTop.WasCollected) _embelTop = FindChild(_row, "EmbelishmentTop");
@@ -206,18 +213,17 @@ static class CoopMenu
         }
         _streak++;
         if (_streak < 3 || Time.unscaledTime - _streakStart < 0.6f) return; // still settling; decide later
-        bool fresh = !_barsHome;
-        bool changed = fresh || Mathf.Abs(t - _topGap) > 2f || Mathf.Abs(b - _bottomGap) > 2f;
         _topGap = t; _bottomGap = b;
         _barsHome = true;
-        _validated = true;
+        _haveGaps = true; // final for this game run; the bars may move now, so measuring again would be circular
         if (!float.IsNaN(t) && !float.IsNaN(b))
         {
             PlayerPrefs.SetFloat(GapTopKey, t);
             PlayerPrefs.SetFloat(GapBottomKey, b);
+            PlayerPrefs.SetString(GapResKey, $"{Screen.width}x{Screen.height}");
             PlayerPrefs.Save();
         }
-        Plugin.Event($"MENU bar offsets {(fresh ? "captured" : changed ? "updated" : "confirmed")} (row {_row.name}, {count} buttons): gaps top {_topGap:F1} / bottom {_bottomGap:F1}; column {top:F1}..{bottom:F1}");
+        Plugin.Event($"MENU bar offsets captured (row {_row.name}, {count} buttons): gaps top {_topGap:F1} / bottom {_bottomGap:F1}; column {top:F1}..{bottom:F1}");
     }
 
     static bool SameGap(float a, float b)

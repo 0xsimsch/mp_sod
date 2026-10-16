@@ -77,6 +77,11 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.24: menu footer offset cache measures once, never from its own writes
+
+- 0.9.19's per-launch "re-validation" measured the bar's distance to the column AFTER cached placement had already moved the bar - it measured our own write and stored that (log: cached bottom -4.9, then "updated" to -81.8), parking the footer ~80 px too low. Gaps are now determined ONCE per game run, always before the first placement, and final; a re-opened menu follows the run's gaps without re-measuring.
+- Cache keys bumped to `sodcoop.menuGapTop.v2`/`menuGapBottom.v2` (ignores poisoned v1 values) and paired with `menuGapRes` - a resolution change re-measures legitimately.
+
 ## 0.9.19: menu header/footer lines follow the co-op buttons
 
 - The main/Esc menu's red header and footer lines (`EmbelishmentTop`/`EmbelishmentBottom`, siblings of the buttons in `MainMenuPanel`) sat at fixed spots, so our added Host/Join (and Invite/Leave) buttons pushed the button column past the footer into it. They now hug the visible column top/bottom on every canvas frame; a `Refresh` hides our own copies and measures the game's untouched column edge once, then re-places. Follows Host/Join ↔ Invite/Leave state changes. (Note: `topBarRend`/`bottomBarRend` are the screen-edge vignette gradients, *not* these lines.)
