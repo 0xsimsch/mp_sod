@@ -5,11 +5,11 @@ using UnityEngine;
 namespace SodCoop.Patches;
 
 /// <summary>
-/// Diagnostics: on the client, releasing a window's pin needle throws a NullReferenceException inside
-/// <c>PinFolderButtonController.ForcePointerUp</c> (Player.log, every attempt) and the note never lands on the board.
-/// That method reads <c>CasePanelController.Instance</c>, the button's <c>parentWindow</c>, the window's
-/// <c>pinOverlay</c>/<c>pinColour</c>, <c>InterfaceControls.Instance</c> and the button's <c>icon</c>; log which is
-/// missing before the game runs it. Read only. A UI callback, not an animation event, so it is safe to hook.
+/// On the client, a note window's pin needle (<c>GameCanvas/WindowCanvas/Note/PinButton</c>) had no
+/// <c>parentWindow</c>: pressing it never started a placement and releasing it threw a NullReferenceException in
+/// <c>PinFolderButtonController.ForcePointerUp</c>, so the note never reached the board (and so never the host).
+/// Before the button handles a press, click or release, give it the window it sits in. Logs each repair once per
+/// button and the state at release. UI callbacks, not animation events, so they are safe to hook.
 /// </summary>
 static class PinButtonDiag
 {
@@ -22,22 +22,40 @@ static class PinButtonDiag
         return s;
     }
 
+    static void Repair(PinFolderButtonController b)
+    {
+        try
+        {
+            if (!Dead(b.parentWindow)) return;
+            var w = b.GetComponentInParent<InfoWindow>();
+            if (Dead(w)) { Plugin.Event($"PIN {PathOf(b.transform)} has no parent window and none above it"); return; }
+            b.parentWindow = w;
+            Plugin.Event($"PIN {PathOf(b.transform)}: parent window was missing; set to {w.name}");
+        }
+        catch (Exception e) { Plugin.Event($"PIN repair failed: {e.Message}"); }
+    }
+
+    [HarmonyPatch(typeof(PinFolderButtonController), nameof(PinFolderButtonController.OnPointerDown))]
+    static class PointerDown { static void Prefix(PinFolderButtonController __instance) => Repair(__instance); }
+
+    [HarmonyPatch(typeof(PinFolderButtonController), nameof(PinFolderButtonController.OnLeftClick))]
+    static class LeftClick { static void Prefix(PinFolderButtonController __instance) => Repair(__instance); }
+
     [HarmonyPatch(typeof(PinFolderButtonController), nameof(PinFolderButtonController.ForcePointerUp))]
     static class ForcePointerUp
     {
         static void Prefix(PinFolderButtonController __instance)
         {
+            Repair(__instance);
             try
             {
                 var panel = CasePanelController.Instance;
                 var w = __instance.parentWindow;
                 Plugin.Event($"PIN release on {PathOf(__instance.transform)}: placement={__instance.placementActive} " +
-                             $"panel={(Dead(panel) ? "MISSING" : "ok")} activeCase={(panel?.activeCase != null ? panel.activeCase.id.ToString() : "none")} " +
-                             $"linkMode={(panel != null && panel.customLinkSelectionMode)} parentWindow={(Dead(w) ? "MISSING" : w.name)} " +
-                             $"pinned={(w != null && !w.WasCollected && w.pinned)} element={(w != null && !w.WasCollected && w.currentPinnedCaseElement != null ? "yes" : "no")} " +
-                             $"pinOverlay={(w == null || w.WasCollected ? "-" : Dead(w.pinOverlay) ? "MISSING" : "ok")} " +
-                             $"pinColour={(w == null || w.WasCollected ? "-" : Dead(w.pinColour) ? "MISSING" : "ok")} " +
-                             $"icon={(Dead(__instance.icon) ? "MISSING" : "ok")} controls={(Dead(InterfaceControls.Instance) ? "MISSING" : "ok")}");
+                             $"activeCase={(panel?.activeCase != null ? panel.activeCase.id.ToString() : "none")} " +
+                             $"parentWindow={(Dead(w) ? "MISSING" : w.name)} pinned={(!Dead(w) && w.pinned)} " +
+                             $"pinOverlay={(Dead(w) ? "-" : Dead(w.pinOverlay) ? "MISSING" : "ok")} " +
+                             $"pinColour={(Dead(w) ? "-" : Dead(w.pinColour) ? "MISSING" : "ok")}");
             }
             catch (Exception e) { Plugin.Event($"PIN diag failed: {e.Message}"); }
         }
