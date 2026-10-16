@@ -75,6 +75,7 @@ public sealed class RemotePlayerBody
         }
 
         body.ResetAnimation();
+        body.DropCitizenProps();
         owner.RemoteBody = body;
         PlayerRegistry.BindRemoteBody(owner, donor);
         Plugin.Event($"{owner} possessed citizen {donor.humanID} \"{donor.citizenName}\"");
@@ -89,6 +90,24 @@ public sealed class RemotePlayerBody
     /// </summary>
     string _lastOutfitStatus;
 
+    /// <summary>
+    /// The citizen may have been holding something for its own routine (a cup, a newspaper…) when we borrowed it;
+    /// the player's own held item is shown separately (<see cref="SetHeld"/>), so drop the citizen's props.
+    /// </summary>
+    void DropCitizenProps()
+    {
+        var ai = Human.ai;
+        if (ai == null) return;
+        try
+        {
+            bool had = ai.spawnedRightItem != null || ai.spawnedLeftItem != null;
+            if (ai.spawnedRightItem != null) ai.DespawnRightItem();
+            if (ai.spawnedLeftItem != null) ai.DespawnLeftItem();
+            if (had) Plugin.Event($"{Owner} body: dropped the citizen's hand props");
+        }
+        catch (System.Exception e) { Plugin.Event($"{Owner} body: could not drop hand props: {e.Message}"); }
+    }
+
     void KeepShown()
     {
         try
@@ -101,6 +120,7 @@ public sealed class RemotePlayerBody
             if (Hidden) { if (Human.visible) Human.SetVisible(false, true); }
             else if (!Human.visible && dist < 80f) Human.SetVisible(true, true);
             _marker.Ensure(Human, Owner.Id.Value);
+            DropCitizenProps();
             var outfit = OutfitStatus();
             if (outfit != _lastOutfitStatus) { _lastOutfitStatus = outfit; Plugin.Event($"{Owner} body outfit: {outfit}, {dist:F0} m, visible={Human.visible}"); }
         }
