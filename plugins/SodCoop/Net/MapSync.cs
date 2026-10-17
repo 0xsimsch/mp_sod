@@ -10,10 +10,14 @@ namespace SodCoop.Net;
 /// <c>SetDiscovered(true)</c>; then the blueprint item is deleted (that part is ItemSync's). The reveal only happened on
 /// that player's machine. While our player takes blueprints, the rooms the game reveals tell the building and the
 /// level; the other machines reveal that building the same way (never lowering a room's level). The host relays.
+/// Also shared: keys (keyring entries), see the keys section.
 /// </summary>
 public static class MapSync
 {
     const byte KindBlueprint = 1; // int buildingId, int level
+    const byte KindKeyAddress = 2; // int addressId: a key to a whole address (all its doors)
+    const byte KindKeyDoor = 3;    // int doorKey (CityData.doorDictionary)
+    const byte KindKeyObject = 4;  // int interactable id (a key to a safe, a box…)
 
     [ThreadStatic] static bool _inTake;
     [ThreadStatic] static bool _applying;
@@ -60,9 +64,91 @@ public static class MapSync
         }
     }
 
+    // ------------------------------------------------------------------ keys: shared like the case knowledge
+
+    // A key one player picks up (ActionController.TakeKey and others → Player.AddToKeyring) opens the door for the
+    // other player too: the keyring entry is sent and added there. The address overload hands out each door of the
+    // address again; those inner door calls aren't sent separately.
+    [ThreadStatic] static int _keyDepth;
+
+    static bool ReportKey(Player p) => !_applying && _keyDepth == 0 && NetSession.Current != null && World.Ready &&
+                                       p != null && Player.Instance != null && p.Pointer == Player.Instance.Pointer;
+
+    static void SendKey(byte kind, int id, string what)
+    {
+        NetSession.Current?.SendExtra(ExtraWire.Write(ExtraWire.Map, kind, w => w.Write(id)));
+        Sent++;
+        Plugin.Event($"MAP key to {what} shared");
+    }
+
+    [HarmonyPatch(typeof(Player), nameof(Player.AddToKeyring), typeof(NewAddress), typeof(bool))]
+    static class KeyAddress
+    {
+        static void Prefix(Player __instance, out bool __state) { __state = ReportKey(__instance); _keyDepth++; }
+        static void Postfix(NewAddress ad, bool __state)
+        {
+            _keyDepth--;
+            if (__state && ad != null) SendKey(KindKeyAddress, ad.id, $"address {ad.id} \"{ad.name}\"");
+        }
+    }
+
+    [HarmonyPatch(typeof(Player), nameof(Player.AddToKeyring), typeof(NewDoor), typeof(bool))]
+    static class KeyDoor
+    {
+        static void Postfix(Player __instance, NewDoor ac)
+        {
+            if (ReportKey(__instance) && WorldSync.TryDoorKey(ac, out var key)) SendKey(KindKeyDoor, key, $"door {key}");
+        }
+    }
+
+    [HarmonyPatch(typeof(Player), nameof(Player.AddToKeyring), typeof(Interactable), typeof(bool))]
+    static class KeyObject
+    {
+        static void Postfix(Player __instance, Interactable inter)
+        {
+            if (ReportKey(__instance) && inter != null) SendKey(KindKeyObject, inter.id, $"object #{inter.id} {inter.name}");
+        }
+    }
+
+    static void ApplyKey(byte kind, int id, PlayerId? fromPlayer)
+    {
+        var me = Player.Instance;
+        if (me == null) return;
+        string who = fromPlayer.HasValue ? fromPlayer.Value.ToString() : "the host";
+        _applying = true;
+        try
+        {
+            switch (kind)
+            {
+                case KindKeyAddress:
+                    if (CityData.Instance?.addressDictionary != null && CityData.Instance.addressDictionary.TryGetValue(id, out var ad) && ad != null)
+                    { me.AddToKeyring(ad, true); Plugin.Event($"MAP {who} shared a key to address {id} \"{ad.name}\""); }
+                    break;
+                case KindKeyDoor:
+                    if (CityData.Instance?.doorDictionary != null && CityData.Instance.doorDictionary.TryGetValue(id, out var door) && door != null)
+                    { me.AddToKeyring(door, true); Plugin.Event($"MAP {who} shared a key to door {id}"); }
+                    break;
+                case KindKeyObject:
+                    var it = WorldSync.FindInteractable(id);
+                    if (it != null) { me.AddToKeyring(it, true); Plugin.Event($"MAP {who} shared a key to #{id} {it.name}"); }
+                    break;
+            }
+            Applied++;
+        }
+        catch (Exception e) { Plugin.Event($"MAP shared key failed: {e.Message}"); }
+        finally { _applying = false; }
+    }
+
     public static void OnPacket(NetSession s, PeerId from, PlayerId? fromPlayer, byte[] data)
     {
         var r = ExtraWire.Read(data, out var kind);
+        if (kind is KindKeyAddress or KindKeyDoor or KindKeyObject)
+        {
+            int keyId = r.ReadInt32();
+            if (s.Role == NetSession.SessionRole.Host) s.SendExtraExcept(data, from);
+            if (World.Ready) ApplyKey(kind, keyId, fromPlayer);
+            return;
+        }
         if (kind != KindBlueprint) return;
         int id = r.ReadInt32(), level = r.ReadInt32();
         if (s.Role == NetSession.SessionRole.Host) s.SendExtraExcept(data, from);

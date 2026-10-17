@@ -114,7 +114,7 @@ public static class WorldSync
 
     static WorldSync() => World.Reloaded += () => { _doorKey = null; _buildings = null; _interactables = null; _lastWeather = default; _isBreaker.Clear(); };
 
-    static bool TryDoorKey(NewDoor door, out int key)
+    internal static bool TryDoorKey(NewDoor door, out int key)
     {
         key = 0;
         if (door == null) return false;
