@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.32";
+    public const string ModVersion = "0.9.33";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -685,7 +685,7 @@ public sealed class NetSession : IDisposable
             case MsgType.Death when Role == SessionRole.Client: DeathSync.Apply(Protocol.ReadDeath(data)); break;
             case MsgType.MurderRecord when Role == SessionRole.Client: MurderSync.Apply(Protocol.ReadMurderRecord(data)); break;
             case (MsgType)ExtraWire.Objective: case (MsgType)ExtraWire.CaseResolve:
-            case (MsgType)ExtraWire.Status: case (MsgType)ExtraWire.Notice: case (MsgType)ExtraWire.Drag:
+            case (MsgType)ExtraWire.Status: case (MsgType)ExtraWire.Notice: case (MsgType)ExtraWire.Drag: case (MsgType)ExtraWire.Map:
                 ExtraWire.OnPacket(this, from, Role == SessionRole.Host && _playerOf.TryGetValue(from, out var xp) ? xp : (PlayerId?)null, (byte)type.Value, data);
                 break;
             case MsgType.CitizenEvent when Role == SessionRole.Client: CitizenEventSync.OnEvent(data); break;

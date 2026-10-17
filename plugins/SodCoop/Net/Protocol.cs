@@ -98,6 +98,8 @@ public enum MsgType : byte
     BodyDrag = 53,
     /// <summary>client → host: the joined world is running here; the host replays what it held back during the load.</summary>
     WorldLoaded = 54,
+    /// <summary>both ways (host relays): map knowledge, e.g. a building's floor plan from blueprints (MapSync, ExtraWire).</summary>
+    MapKnowledge = 55,
 }
 
 public struct Vec3
@@ -387,7 +389,7 @@ public struct ForensicMsg
 public static class Protocol
 {
     /// <summary>Bump on any wire change. Hosts reject other versions in the handshake.</summary>
-    public const ushort Version = 41;
+    public const ushort Version = 42;
     const ushort Magic = 0x4D53; // "SM"
 
     public static byte[] Hello(HelloMsg m) => Write(MsgType.Hello, w =>
