@@ -133,6 +133,10 @@ static class PauseSync
     {
         var sd = SessionData.Instance;
         if (sd == null || !InSession || _inInput) return;
+        // Every frame (until 0.9.39 these sat after the early return below, so they only ran while the menu and pause
+        // state disagreed: almost never).
+        MovementCheck(now);
+        LookCheck(now);
         bool open = MenuOpen();
         if (open == LocalPaused) { _mismatchSince = -1f; _stuckLogged = false; return; }
         if (_mismatchSince < 0f) { _mismatchSince = now; return; }
@@ -150,7 +154,6 @@ static class PauseSync
             var ic = InteractionController.Instance;
             Plugin.Event($"PAUSE paused for 3 s with no board or menu open ({UiState()} lockedIn={(ic?.lockedInInteraction != null ? ic.lockedInInteraction.name : "none")}) — a dialog, or stuck?");
         }
-        MovementCheck(now);
     }
 
     /// <summary>The game's own pause took the player's movement away (Player.OnPauseChange) and hasn't given it back.</summary>
@@ -198,6 +201,46 @@ static class PauseSync
     }
 
     static float _frozenSince = -1f;
+    static float _lookFrozenSince = -1f, _forcedLookSince = -1f;
+
+    /// <summary>
+    /// Like <see cref="MovementCheck"/> for the mouse look (seen: a client could walk but not look around after joining,
+    /// the view "fixed back into the middle"; the mod never touches the look, so the game left it off). Off for 3 s with
+    /// nothing that locks the view: turned back on, with the player's state logged. A forced look-at the game normally
+    /// uses for a moment (Player.ForceLookAt) is released after 10 s.
+    /// </summary>
+    static void LookCheck(float now)
+    {
+        try
+        {
+            var p = Player.Instance;
+            var ic = InteractionController.Instance;
+            var cut = CutSceneController.Instance;
+            if (p == null || p.fps == null) return;
+            if (p.forceLookAtActive)
+            {
+                if (_forcedLookSince < 0f) _forcedLookSince = now;
+                else if (now - _forcedLookSince > 10f)
+                {
+                    Plugin.Event($"PAUSE the view was forced to look at {(p.forceLookAtInteractable != null ? p.forceLookAtInteractable.name : "something")} for 10 s: released");
+                    p.forceLookAtActive = false;
+                    _forcedLookSince = -1f;
+                }
+            }
+            else _forcedLookSince = -1f;
+            bool explained = p.fps.enableLook || LocalPaused || MenuOpen() || p.transitionActive || p.playerKOInProgress ||
+                             p.isDead || p.isStunned || p.isLockpicking || p.activeCall != null ||
+                             ic == null || ic.lockedInInteraction != null || ic.interactionMode || (cut != null && cut.cutSceneActive);
+            if (explained) { _lookFrozenSince = -1f; return; }
+            if (_lookFrozenSince < 0f) { _lookFrozenSince = now; return; }
+            if (now - _lookFrozenSince < 3f) return;
+            _lookFrozenSince = -1f;
+            Plugin.Event($"PAUSE mouse look was off for 3 s with nothing holding it ({UiState()} forceLookAt={p.forceLookAtActive} " +
+                         $"transition={(p.currentTransition != null ? p.currentTransition.name : "-")} hiding={p.isHiding} vent={p.inAirVent} bed={p.isInBed}): turned it back on");
+            p.EnablePlayerMouseLook(true, false);
+        }
+        catch { /* best effort */ }
+    }
 
     /// <summary>
     /// Safety net: not paused, no menu, and nothing that locks the player (transition, seat/search/computer, dialog,
