@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.29";
+    public const string ModVersion = "0.9.30";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -304,7 +304,11 @@ public sealed class NetSession : IDisposable
         if (Role == SessionRole.Host) SnapshotSync.Poll();
 
         // Pausing: the host pauses the world only while everyone is paused; clients report their own state.
-        if (Role == SessionRole.Host && _playerOf.Count > 0) WorldSync.HostTick(now);
+        if (Role == SessionRole.Host && _playerOf.Count > 0)
+        {
+            WorldSync.HostTick(now);
+            DoorSync.HostApproachTick(now, ClientBodies(), (peer, msg) => SendTo(peer, Protocol.DoorState(msg), true));
+        }
         if (Role == SessionRole.Host && _playerOf.Count > 0) ElevatorSync.HostTick(now);
         if (now >= _nextBodyMap)
         {
@@ -994,6 +998,14 @@ public sealed class NetSession : IDisposable
         ItemSync.Apply(m);
     }
 
+    /// <summary>Host: each connected client's peer and its body's position here.</summary>
+    IEnumerable<(PeerId, Vector3)> ClientBodies()
+    {
+        foreach (var kv in _playerOf)
+            if (PlayerRegistry.TryGet(kv.Value, out var p) && p.Body != null && !p.Body.WasCollected)
+                yield return (kv.Key, p.Body.transform.position);
+    }
+
     public void SendItem(ItemMsg m)
     {
         if (Role == SessionRole.Client && !_welcomed) return;
@@ -1292,5 +1304,5 @@ public sealed class NetSession : IDisposable
         $"{Role} on {_transport.Name}" +
         (_lobby != null ? $" lobby={_lobby.LobbyId}" : "") + SteamStatus() +
         (Role == SessionRole.Client ? $" welcomed={_welcomed} rejected={_rejected} bodies={_clientBodies.Count}" : $" clients={_playerOf.Count}") +
-        $" snapshot[{SnapshotSync.LastStatus}] in={PacketsIn} out={PacketsOut} npcPosesSent={NpcPosesSent} npcDriven={Puppet.NpcPuppets.Count} npcReceived={Puppet.NpcPuppets.Received} doors sent={DoorSync.Sent} applied={DoorSync.Applied} nearestDoor[{NearestDoor()}] {CaseSync.Describe()} cit ev={CitizenEventSync.EventsSent}/{CitizenEventSync.EventsApplied} st={CitizenEventSync.StatesSent}/{CitizenEventSync.StatesApplied} world sent={WorldSync.Sent} applied={WorldSync.Applied} lift sent={ElevatorSync.Sent} applied={ElevatorSync.Applied} gadget sent={GadgetSync.Sent} applied={GadgetSync.Applied} blood sent={BloodSync.Sent} applied={BloodSync.Applied} removed={BloodSync.RemovedLocal} news {NewsSync.Sent}/{NewsSync.Applied} phone sent={PhoneSync.Sent} applied={PhoneSync.Applied} dialog sent={DialogSync.Sent} applied={DialogSync.Applied} jobs sent={JobSync.Sent} applied={JobSync.Applied} acceptRequests={JobSync.AcceptRequests} items sent={ItemSync.Sent} applied={ItemSync.Applied} missed={ItemSync.Missed} cases sent={CaseRecordSync.Sent} applied={CaseRecordSync.Applied} murders sent={MurderSync.Sent} applied={MurderSync.Applied} forensics sent={ForensicSync.Sent} applied={ForensicSync.Applied} deaths sent={DeathSync.Sent} applied={DeathSync.Applied} spawns sent={SpawnSync.Sent} applied={SpawnSync.Applied} failed={SpawnSync.Failed} presets[{SpawnSync.SamplePresets()}] worldAssignID={Interactable.worldAssignID}";
+        $" snapshot[{SnapshotSync.LastStatus}] in={PacketsIn} out={PacketsOut} npcPosesSent={NpcPosesSent} npcDriven={Puppet.NpcPuppets.Count} npcReceived={Puppet.NpcPuppets.Received} doors sent={DoorSync.Sent} applied={DoorSync.Applied} resynced={DoorSync.Resynced} nearestDoor[{NearestDoor()}] {CaseSync.Describe()} cit ev={CitizenEventSync.EventsSent}/{CitizenEventSync.EventsApplied} st={CitizenEventSync.StatesSent}/{CitizenEventSync.StatesApplied} world sent={WorldSync.Sent} applied={WorldSync.Applied} lift sent={ElevatorSync.Sent} applied={ElevatorSync.Applied} gadget sent={GadgetSync.Sent} applied={GadgetSync.Applied} blood sent={BloodSync.Sent} applied={BloodSync.Applied} removed={BloodSync.RemovedLocal} news {NewsSync.Sent}/{NewsSync.Applied} phone sent={PhoneSync.Sent} applied={PhoneSync.Applied} dialog sent={DialogSync.Sent} applied={DialogSync.Applied} jobs sent={JobSync.Sent} applied={JobSync.Applied} acceptRequests={JobSync.AcceptRequests} items sent={ItemSync.Sent} applied={ItemSync.Applied} missed={ItemSync.Missed} cases sent={CaseRecordSync.Sent} applied={CaseRecordSync.Applied} murders sent={MurderSync.Sent} applied={MurderSync.Applied} forensics sent={ForensicSync.Sent} applied={ForensicSync.Applied} deaths sent={DeathSync.Sent} applied={DeathSync.Applied} spawns sent={SpawnSync.Sent} applied={SpawnSync.Applied} failed={SpawnSync.Failed} presets[{SpawnSync.SamplePresets()}] worldAssignID={Interactable.worldAssignID}";
 }

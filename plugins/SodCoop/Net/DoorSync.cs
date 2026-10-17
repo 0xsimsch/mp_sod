@@ -37,7 +37,51 @@ public static class DoorSync
         return _keyOf.TryGetValue(door.Pointer, out key);
     }
 
-    public static void Reset() => _keyOf = null;
+    public static void Reset()
+    {
+        _keyOf = null;
+        _inRange.Clear();
+    }
+
+    // Host: door states far from a client diverge (the host only sends changes within InterestRadius, and the
+    // client's own citizens lock/unlock doors too), and locks last. Sending every change city-wide is a lot of
+    // traffic, so instead each door's state goes to a client once when the client's body comes within range.
+    const float ResyncInterval = 1f, LeaveRadius = InterestRadius + 10f;
+    static float _nextResync;
+    static readonly Dictionary<PeerId, HashSet<int>> _inRange = new();
+
+    public static int Resynced { get; private set; }
+
+    /// <summary>Host, per frame: doors that came within range of a client since the last check get their state sent.</summary>
+    public static void HostApproachTick(float now, IEnumerable<(PeerId peer, Vector3 pos)> clients, Action<PeerId, DoorStateMsg> send)
+    {
+        if (now < _nextResync || !World.Ready) return;
+        _nextResync = now + ResyncInterval;
+        var dict = CityData.Instance?.doorDictionary;
+        if (dict == null) return;
+        var seen = new HashSet<PeerId>();
+        foreach (var (peer, pos) in clients)
+        {
+            seen.Add(peer);
+            if (!_inRange.TryGetValue(peer, out var set)) _inRange[peer] = set = new HashSet<int>();
+            int sent = 0;
+            foreach (var kv in dict)
+            {
+                var door = kv.Value;
+                if (door == null) continue;
+                float d = Vector3.Distance(door.transform.position, pos);
+                if (d <= InterestRadius)
+                {
+                    if (!set.Add(kv.Key)) continue;
+                    send(peer, new DoorStateMsg { DoorKey = kv.Key, Ajar = door.ajar, Locked = door.isLocked, ByPlayer = 255 });
+                    sent++;
+                }
+                else if (d > LeaveRadius) set.Remove(kv.Key);
+            }
+            Resynced += sent;
+        }
+        foreach (var gone in new List<PeerId>(_inRange.Keys)) if (!seen.Contains(gone)) _inRange.Remove(gone);
+    }
 
     static DoorSync() => World.Reloaded += Reset;
 

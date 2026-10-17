@@ -86,12 +86,9 @@ seconds since `MainMenuController.Start`. If it still freezes, add TRACE lines a
 Same pattern as the windows: a lasting change made by the host's citizens far from any client never reaches the client.
 0.9.28 fixed windows and 0.9.29 police tape, barged doors and breakers. Still open:
 
-- **Items moved by citizens.** `ItemSync` only sends player actions (`IsLocal` checks). A murderer leaving the weapon,
-  citizens taking or putting down items, and evidence moved at a crime scene stay where the client's own simulation put
-  them. Fix idea: the host sends `MoveInteractable`/`SetInInventory`/`Delete` done by citizens for
-  `savableInteractableDictionary` items, at least for the murderer and the current case's items (murder weapon,
-  `MurderController` passed objects), and everything near a client.
-- **Door locks far away.** `DoorSync` sends door changes only within 60 m of a client. Locks last, but citizens lock and
+- **Items moved by citizens:** not a gap after all. On the host, `ItemSync.ClientMayReport` is always true and
+  `NetSession.SendItem` broadcasts with no radius, so citizens' moves, pickups, drops and deletes already reach clients.
+- **Door locks far away (fixed in 0.9.30 by resync on approach).** `DoorSync` sends door changes only within 60 m of a client. Locks last, but citizens lock and
   unlock doors constantly across the city, so sending all of them is a lot of traffic. Fix idea: when a client's body
   comes within 60 m of a door, the host sends that door's lock state once (a resync on approach). The same idea would
   also cover lights left on or off.
