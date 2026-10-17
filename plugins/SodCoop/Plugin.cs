@@ -38,6 +38,7 @@ public class Plugin : BasePlugin
             "Off for play: PageUp teleports you to the other player, Delete removes their body, End puts it in a far home.").Value;
 
         PatchEach(new Harmony(Guid));
+        Patches.MenuBackground.Install();
 
         ClassInjector.RegisterTypeInIl2Cpp<CoopBehaviour>();
         AddComponent<CoopBehaviour>();

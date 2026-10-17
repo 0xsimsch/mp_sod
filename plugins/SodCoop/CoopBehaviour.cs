@@ -51,6 +51,7 @@ public class CoopBehaviour : MonoBehaviour
         Step("ghost", RecordGhost);
         Step("throws", ItemSync.Tick);
         Step("menu", () => { if (Time.frameCount % 30 == 0) Patches.CoopMenu.Refresh(); });
+        Step("backdrop", Patches.MenuBackground.Tick);
         Step("keys", HandleKeys);
         Step("snapshot", PollSnapshot);
         Step("perf", SamplePerf);

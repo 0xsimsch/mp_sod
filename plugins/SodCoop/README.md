@@ -77,6 +77,10 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.37
+
+- The splash screen still showed the old art: "Press Any Button" is its own scene (`level0`, 12 objects: its own `Background Image` + `Logo` + `PressAnyButtonText`) with a separate copy of the `menuBG` sprite - `MainMenuController.backgroundImage` only owns the main-menu panel's copy (in `level1`). `MenuBackground` now sweeps every scene on load: any `Image` whose sprite or `RawImage` whose texture is still named `menuBG` gets the bundled one (plus an immediate sweep of the active scene at plugin load, and the `EnableMainMenu` catch-up).
+
 ## 0.9.32: bundled menu background
 
 - The menu's backdrop is replaced with our own image: `Assets/menu_bg.png` is embedded in `SodCoop.dll` and set as `MainMenuController.backgroundImage.sprite` (`Patches/MenuBackground.cs`), so a fresh mod install gets it with no extra files. The backdrop is that UI Image behind every menu panel - a still, not a live city view (`analysis/MENU_RESULTS.md`, settled by extracting `menuBG` from `sharedassets0.assets`).
