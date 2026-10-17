@@ -77,6 +77,12 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.32: bundled menu background
+
+- The menu's backdrop is replaced with our own image: `Assets/menu_bg.png` is embedded in `SodCoop.dll` and set as `MainMenuController.backgroundImage.sprite` (`Patches/MenuBackground.cs`), so a fresh mod install gets it with no extra files. The backdrop is that UI Image behind every menu panel - a still, not a live city view (`analysis/MENU_RESULTS.md`, settled by extracting `menuBG` from `sharedassets0.assets`).
+- Applied in `MainMenuController.Start` (before the menu's first drawn frame, so even the splash never shows the vanilla one) with an `EnableMainMenu` catch-up; the texture+sprite are rebuilt if Unity collected the previous menu scene's copy. Vanilla background stays if the resource is missing or decoding fails (`MENU background failed: …`, logged once).
+- Log: `MENU background texture ready: 2048x1152 from 2536 KB png`, then `MENU background replaced with the bundled image`.
+
 ## 0.9.26: walking again after closing the board
 
 - Report: the client couldn't walk (could still look, use and drag). `Player.OnPauseChange` (0x44D3D0) saves `fps.enableMovement` into `pausedRememberPlayerMovement` on pause and restores it on resume. In co-op the world runs behind the board, so a transition with movement off (searching the victim) finished while the board was open and turned movement on; closing the board then restored the saved "off". While the pause holds the movement, `EnablePlayerMovement` from anything else now only updates the saved value, so the resume applies it (single player's order). Logged as "movement turned on/off behind the menu".

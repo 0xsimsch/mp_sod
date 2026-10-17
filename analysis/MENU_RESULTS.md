@@ -46,10 +46,13 @@ property accessors survive `RefStrip`, so members like `menu.topBarRend` are usa
 - `public UnityEngine.UI.Image logoImage` - the game logo.
 - `public UnityEngine.CanvasRenderer fadeOverlay` - the fade used in `EnableMainMenu`/`MenuMotion`.
 - `public RectTransform mainMenuContainer` - the menu's root rect.
-- Open question: where the city view behind the canvas comes from (a live camera rendering a demo city, or a
-  still image). `Image.color`/`sprite` on `backgroundImage` and the canvas sort order vs. the camera stack
-  need one runtime hierarchy dump to settle. Once known, swapping the background is likely just setting
-  `backgroundImage.sprite` (and maybe keeping the bars' sprite untouched).
+- **Resolved 2026-10-17** (UnityPy extraction): the backdrop is a **still image** - `Texture2D`/`Sprite` `menuBG`
+  (2048x1152, RGBA32, single mip level) in `sharedassets0.assets`. The scene's `Background Image` GameObject is
+  anchored full-rect (0..1, zero offsets, no fitter), so the texture is **stretched to the screen at any aspect**
+  (1.35x horizontal at 21:9) and bilinearly upscaled beyond its 2048 px width; there is no higher-res variant.
+  `Image.color`/the canvas stack: not live after all - swapping the background is just setting
+  `backgroundImage.sprite` (and keeping the bars' sprite untouched), which SodCoop 0.9.32 now does from an
+  embedded PNG (`plugins/SodCoop/Patches/MenuBackground.cs`).
 
 ## Button behavior the mod relies on
 
