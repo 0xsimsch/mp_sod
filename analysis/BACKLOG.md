@@ -47,7 +47,12 @@ main menu (it shows nothing after that on good runs either).
 (mod.io/workshop queries, `UnloadUnusedAssets`). `LoadJoinSave` switching to `loadingCity` at that moment may
 deadlock Unity's async loading.
 
-**Fix to try:** test first by waiting about 30 s on the menu before joining. If that avoids it, `LoadJoinSave`
+**Cause found (2026-10-17):** not the timing. A join 5 minutes after the menu froze the same way, and a Windows
+message box behind the game said "SuspendThread loop failed". That's IL2CPP's Boehm GC failing to suspend a thread
+under Wine/Proton during a collection in the load, then waiting on the box. **0.9.27** turns the GC off from the switch to
+the loading screen until the joined world runs (max 180 s, or on session reset). The timing guess below is obsolete.
+
+**Old fix idea:** test first by waiting about 30 s on the menu before joining. If that avoids it, `LoadJoinSave`
 should wait until the menu has settled before switching to `loadingCity`: no pending `AsyncOperation`, and a few
 seconds since `MainMenuController.Start`. If it still freezes, add TRACE lines around `EnableMainMenu`,
 `SetMenuComponent` and `CityConstructor.StartLoading`, and grab the main thread's stack with `winedbg` while it hangs.

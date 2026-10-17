@@ -220,6 +220,38 @@ public static class SnapshotSync
         _hostItems.Clear();
     }
 
+    // The garbage collector during the join load. Seen 3 times (2026-10-16/17): the client froze at "loading the host's
+    // world…" behind a Windows message box "SuspendThread loop failed": IL2CPP's Boehm GC must suspend every thread to
+    // collect, and under Wine/Proton suspending a thread that sits in a system call (the loading threads read files)
+    // fails; the GC gives up with that box and the game waits on it forever. Loading allocates a lot, so a collection
+    // during the load was likely. No collections while the host's world loads: the GC is off from the switch to the
+    // loading screen until the world runs (at most GcMaxPause seconds, or when the session resets).
+    static float _gcPausedAt = -1f;
+    const float GcMaxPause = 180f;
+
+    static void PauseGc()
+    {
+        try
+        {
+            UnityEngine.Scripting.GarbageCollector.GCMode = UnityEngine.Scripting.GarbageCollector.Mode.Disabled;
+            _gcPausedAt = UnityEngine.Time.unscaledTime;
+            Plugin.Event("SNAPSHOT garbage collector off while the host's world loads");
+        }
+        catch (Exception e) { Plugin.Event($"SNAPSHOT could not pause the garbage collector: {e.Message}"); }
+    }
+
+    public static void ResumeGc(string why)
+    {
+        if (_gcPausedAt < 0f) return;
+        _gcPausedAt = -1f;
+        try
+        {
+            UnityEngine.Scripting.GarbageCollector.GCMode = UnityEngine.Scripting.GarbageCollector.Mode.Enabled;
+            Plugin.Event($"SNAPSHOT garbage collector on again ({why})");
+        }
+        catch (Exception e) { Plugin.Event($"SNAPSHOT could not resume the garbage collector: {e.Message}"); }
+    }
+
     static string _pendingDelete;
     static bool _sawLoading;
     static int _keepMoney = -1;
@@ -248,6 +280,7 @@ public static class SnapshotSync
             _keepMoney = inWorld && GameplayController.Instance != null ? GameplayController.Instance.money : -1;
             Profiles.CaptureBeforeJoin(); // our own money, upgrades, items… before the host's save replaces them
             NetSession.Current?.PrepareForWorldReload(); // borrowed bodies belong to the old world
+            PauseGc();
             menu.EnableMainMenu(true, false, false, MainMenuController.Component.loadingCity);
             menu.SetMenuComponent(MainMenuController.Component.loadingCity);
             Plugin.Event("SNAPSHOT loading the host's world…");
@@ -258,6 +291,7 @@ public static class SnapshotSync
     /// <summary>Per frame on clients: once the joined world runs, remove the temporary save again.</summary>
     public static void CleanupAfterLoad()
     {
+        if (_gcPausedAt >= 0f && UnityEngine.Time.unscaledTime - _gcPausedAt > GcMaxPause) ResumeGc("the load is taking too long");
         if (_pendingDelete == null) return;
         // Wait for the load to actually happen (the old world is still running when it starts).
         if (SessionData.Instance == null || !SessionData.Instance.play || CityData.Instance == null) { _sawLoading = true; return; }
@@ -271,6 +305,7 @@ public static class SnapshotSync
         }
         GiveBackHostInventory();
         Profiles.RestoreAfterJoin();
+        ResumeGc("the joined world is running");
         try { File.Delete(_pendingDelete); Plugin.Event("SNAPSHOT joined world is running; removed the temporary 'MP Join' save"); }
         catch (Exception e) { Plugin.Event($"SNAPSHOT could not remove {_pendingDelete}: {e.Message}"); }
         _pendingDelete = null;

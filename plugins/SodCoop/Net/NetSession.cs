@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.26";
+    public const string ModVersion = "0.9.27";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -1157,6 +1157,7 @@ public sealed class NetSession : IDisposable
     /// <summary>Client: the host is gone; release every other player's body, NPC puppets and host pause.</summary>
     void ResetClientWorld(string why)
     {
+        SnapshotSync.ResumeGc(why);
         Profiles.OnLeave("host gone");
         RestSync.Reset();
         ElevatorSync.Reset();
