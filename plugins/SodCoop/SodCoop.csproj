@@ -29,10 +29,16 @@
     <Reference Include="$(InteropDir)/UnityEngine.IMGUIModule.dll" Private="false" />
     <Reference Include="$(InteropDir)/UnityEngine.UIModule.dll" Private="false" />
     <Reference Include="$(InteropDir)/UnityEngine.UI.dll" Private="false" />
+    <Reference Include="$(InteropDir)/UnityEngine.ImageConversionModule.dll" Private="false" />
     <Reference Include="$(InteropDir)/Unity.TextMeshPro.dll" Private="false" />
     <Reference Include="$(InteropDir)/UnityEngine.AudioModule.dll" Private="false" />
     <Reference Include="$(InteropDir)/UnityEngine.TextRenderingModule.dll" Private="false" />
     <Reference Include="$(InteropDir)/com.rlabrecque.steamworks.net.dll" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- New main menu background applied by Patches/MenuBackground.cs (see analysis/MENU_RESULTS.md). -->
+    <EmbeddedResource Include="Assets/menu_bg.png" LogicalName="SodCoop.menu_bg.png" />
   </ItemGroup>
 
   <!-- -p:CopyToGame=false (CI) only builds, without touching a game folder -->
