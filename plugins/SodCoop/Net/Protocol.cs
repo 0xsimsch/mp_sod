@@ -96,6 +96,8 @@ public enum MsgType : byte
     RestState = 52,
     /// <summary>both ways (host relays): a dragged body's limb pose (DragSync, framed by ExtraWire).</summary>
     BodyDrag = 53,
+    /// <summary>client → host: the joined world is running here; the host replays what it held back during the load.</summary>
+    WorldLoaded = 54,
 }
 
 public struct Vec3
@@ -385,7 +387,7 @@ public struct ForensicMsg
 public static class Protocol
 {
     /// <summary>Bump on any wire change. Hosts reject other versions in the handshake.</summary>
-    public const ushort Version = 40;
+    public const ushort Version = 41;
     const ushort Magic = 0x4D53; // "SM"
 
     public static byte[] Hello(HelloMsg m) => Write(MsgType.Hello, w =>
@@ -481,6 +483,8 @@ public static class Protocol
     });
 
     public static byte[] VictimDiscovered() => Write(MsgType.VictimDiscovered, w => { });
+
+    public static byte[] WorldLoaded() => Write(MsgType.WorldLoaded, w => { });
 
     public static byte[] JobAccept(int jobId) => Write(MsgType.JobAccept, w => w.Write(jobId));
 

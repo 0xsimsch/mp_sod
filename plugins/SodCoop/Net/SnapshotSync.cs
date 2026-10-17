@@ -40,10 +40,13 @@ public static class SnapshotSync
 
     public static string LastStatus { get; private set; } = "";
 
+    static readonly List<Action> _captured = new();
+
     /// <summary>Host: snapshot for a new client (one capture serves everyone waiting).</summary>
-    public static void RequestFor(Func<byte[], bool> send, Func<int> pending)
+    public static void RequestFor(Func<byte[], bool> send, Func<int> pending, Action captured = null)
     {
         _waiting.Add((send, pending));
+        if (captured != null) _captured.Add(captured);
         if (_capture != null || SaveStateController.Instance == null) return;
         _capturePath = Path.Combine(BepInEx.Paths.BepInExRootPath, "mp_sod_join_snapshot.sod");
         _capture = SaveStateController.Instance.CaptureSaveStateAsync(_capturePath, true);
@@ -63,6 +66,9 @@ public static class SnapshotSync
         }
         if (_capture == null || !_capture.IsCompleted) return;
         _capture = null;
+        // From here on, what happens on the host isn't in the save the clients load: NetSession holds it for them.
+        foreach (var c in _captured) { try { c(); } catch (Exception e) { Plugin.Event($"SNAPSHOT capture callback failed: {e.Message}"); } }
+        _captured.Clear();
         var file = _capturePath + "b"; // the game appends 'b' for the compressed form
         if (!File.Exists(file)) file = _capturePath;
         if (!File.Exists(file)) { Plugin.Event("SNAPSHOT capture produced no file"); _waiting.Clear(); return; }
@@ -306,6 +312,7 @@ public static class SnapshotSync
         GiveBackHostInventory();
         Profiles.RestoreAfterJoin();
         ResumeGc("the joined world is running");
+        NetSession.Current?.SendWorldLoaded();
         try { File.Delete(_pendingDelete); Plugin.Event("SNAPSHOT joined world is running; removed the temporary 'MP Join' save"); }
         catch (Exception e) { Plugin.Event($"SNAPSHOT could not remove {_pendingDelete}: {e.Message}"); }
         _pendingDelete = null;

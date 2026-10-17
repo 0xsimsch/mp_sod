@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.30";
+    public const string ModVersion = "0.9.31";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -306,6 +306,7 @@ public sealed class NetSession : IDisposable
         // Pausing: the host pauses the world only while everyone is paused; clients report their own state.
         if (Role == SessionRole.Host && _playerOf.Count > 0)
         {
+            LoadQueueTick(now);
             WorldSync.HostTick(now);
             DoorSync.HostApproachTick(now, ClientBodies(), (peer, msg) => SendTo(peer, Protocol.DoorState(msg), true));
         }
@@ -664,6 +665,7 @@ public sealed class NetSession : IDisposable
             case MsgType.CitizenPoses when Role == SessionRole.Client: Puppet.NpcPuppets.OnPoses(Protocol.ReadCitizenPoses(data), now); break;
             case MsgType.DialogExecute when Role == SessionRole.Host && _playerOf.TryGetValue(from, out var dlgFrom): DialogSync.OnPacket(dlgFrom, data); break;
             case MsgType.DialogEnd when Role == SessionRole.Host && _playerOf.TryGetValue(from, out var dlgEndFrom): DialogSync.OnPacket(dlgEndFrom, data); break;
+            case MsgType.WorldLoaded when Role == SessionRole.Host: FlushLoadQueue(from, "its world is running"); break;
             case MsgType.VictimDiscovered when Role == SessionRole.Host && _playerOf.TryGetValue(from, out var finder): CaseIds.OnClientDiscovery(finder); break;
             case MsgType.Phone:
                 PhoneSync.OnPacket(Role == SessionRole.Host && _playerOf.TryGetValue(from, out var phoneSender) ? phoneSender : (PlayerId?)null, data);
@@ -783,7 +785,7 @@ public sealed class NetSession : IDisposable
         CaseRecordSync.SendAll((json, active) => SendTo(from, Protocol.CaseRecord(json, active), true));
         SendTo(from, Protocol.BodyMap(BodyMapNow()), true);
         NewsSync.SendTo(data => SendTo(from, data, true));
-        if (isNewPlayer) SnapshotSync.RequestFor(chunk => SendTo(from, chunk, true), () => _transport.PendingReliableBytes(from));
+        if (isNewPlayer) SnapshotSync.RequestFor(chunk => SendTo(from, chunk, true), () => _transport.PendingReliableBytes(from), () => BeginLoadQueue(from));
     }
 
     void OnWelcome(WelcomeMsg m)
@@ -1243,6 +1245,7 @@ public sealed class NetSession : IDisposable
         _lastHeard.Remove(peer);
         foreach (var k in new List<(PeerId, int)>(_npcLastSent.Keys)) if (k.Item1 == peer) _npcLastSent.Remove(k);
         Patches.PauseSync.Forget(peer);
+        _loadQueue.Remove(peer);
         if (!_playerOf.Remove(peer, out var id)) return;
         CitizenEventSync.Forget(id);
         StatusSync.Forget(id);
@@ -1268,8 +1271,60 @@ public sealed class NetSession : IDisposable
 
     bool SendTo(PeerId peer, byte[] data, bool reliable)
     {
+        if (reliable && Role == SessionRole.Host && _loadQueue.TryGetValue(peer, out var q) && HoldDuringLoad(data))
+        {
+            q.packets.Add(data);
+            if (q.packets.Count >= LoadQueueMax) FlushLoadQueue(peer, $"{LoadQueueMax} messages held");
+            return true;
+        }
         PacketsOut++;
         return _transport.Send(peer, data, reliable);
+    }
+
+    // ------------------------------------------------------------------ joining: what happens during a client's load
+
+    // A client loads the host's save for ~30 s, and drops every event that arrives before its world runs. Events
+    // after the save was captured were lost for that client (a window broken, tape put up, an item moved meanwhile).
+    // From the capture until the client says its world runs (WorldLoaded), the host holds its reliable messages to
+    // that client and then sends them in order. The join itself (welcome, snapshot, ping, time, bye) goes straight.
+    const int LoadQueueMax = 20000;
+    const float LoadQueueMaxSeconds = 300f;
+    readonly Dictionary<PeerId, (List<byte[]> packets, float since)> _loadQueue = new();
+
+    static bool HoldDuringLoad(byte[] data)
+    {
+        var t = Protocol.PeekType(data);
+        return t is not (MsgType.Welcome or MsgType.Reject or MsgType.SnapshotChunk or MsgType.Ping or MsgType.TimeSync or MsgType.Bye or null);
+    }
+
+    void BeginLoadQueue(PeerId peer)
+    {
+        if (!_playerOf.ContainsKey(peer) || _loadQueue.ContainsKey(peer)) return;
+        _loadQueue[peer] = (new List<byte[]>(), UnityEngine.Time.unscaledTime);
+        Plugin.Event($"JOIN holding events for {peer} until its world is running");
+    }
+
+    void FlushLoadQueue(PeerId peer, string why)
+    {
+        if (!_loadQueue.Remove(peer, out var q)) return;
+        int bytes = 0;
+        foreach (var p in q.packets) { bytes += p.Length; PacketsOut++; _transport.Send(peer, p, true); }
+        Plugin.Event($"JOIN {why}: replayed {q.packets.Count} held event(s) ({bytes / 1024} KB) to {peer} after {UnityEngine.Time.unscaledTime - q.since:F0} s");
+    }
+
+    void LoadQueueTick(float now)
+    {
+        foreach (var kv in new List<KeyValuePair<PeerId, (List<byte[]> packets, float since)>>(_loadQueue))
+        {
+            if (!_playerOf.ContainsKey(kv.Key)) { _loadQueue.Remove(kv.Key); continue; }
+            if (now - kv.Value.since > LoadQueueMaxSeconds) FlushLoadQueue(kv.Key, "no word from it for 5 minutes");
+        }
+    }
+
+    /// <summary>Client: the joined world runs; the host may send what it held back.</summary>
+    public void SendWorldLoaded()
+    {
+        if (Role == SessionRole.Client && _welcomed && _hasHost) SendTo(_host, Protocol.WorldLoaded(), true);
     }
 
     static Vec3 ToVec(Vector3 v) => new(v.x, v.y, v.z);
