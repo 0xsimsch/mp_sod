@@ -235,11 +235,18 @@ public static class SnapshotSync
     static float _gcPausedAt = -1f;
     const float GcMaxPause = 180f;
 
+    // UnityEngine.Scripting.GarbageCollector.GCMode is stripped from this game ("Method unstripping failed", 0.9.27-0.9.36):
+    // use the IL2CPP runtime's own exports instead.
+    [System.Runtime.InteropServices.DllImport("GameAssembly", CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    static extern void il2cpp_gc_disable();
+    [System.Runtime.InteropServices.DllImport("GameAssembly", CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    static extern void il2cpp_gc_enable();
+
     static void PauseGc()
     {
         try
         {
-            UnityEngine.Scripting.GarbageCollector.GCMode = UnityEngine.Scripting.GarbageCollector.Mode.Disabled;
+            il2cpp_gc_disable();
             _gcPausedAt = UnityEngine.Time.unscaledTime;
             Plugin.Event("SNAPSHOT garbage collector off while the host's world loads");
         }
@@ -252,7 +259,7 @@ public static class SnapshotSync
         _gcPausedAt = -1f;
         try
         {
-            UnityEngine.Scripting.GarbageCollector.GCMode = UnityEngine.Scripting.GarbageCollector.Mode.Enabled;
+            il2cpp_gc_enable();
             Plugin.Event($"SNAPSHOT garbage collector on again ({why})");
         }
         catch (Exception e) { Plugin.Event($"SNAPSHOT could not resume the garbage collector: {e.Message}"); }
@@ -280,6 +287,7 @@ public static class SnapshotSync
             rs.newGameLoadCity = false;
             _pendingDelete = path;
             _sawLoading = false;
+            _joinWaitLogAt = -1f;
             // Design: money is per player. The snapshot carries the host's, so keep ours.
             // Joined from the main menu: no money of our own yet, so take the save's.
             bool inWorld = CityData.Instance != null && SessionData.Instance != null && SessionData.Instance.play;
@@ -295,10 +303,31 @@ public static class SnapshotSync
     }
 
     /// <summary>Per frame on clients: once the joined world runs, remove the temporary save again.</summary>
+    static float _joinWaitLogAt = -1f;
+
+    /// <summary>
+    /// Diagnostics (seen with 0.9.36: the world loaded but "joined world is running" never came, the player couldn't
+    /// move and the host's body never appeared): every 10 s while a join is unfinished, what it is waiting for.
+    /// </summary>
+    static void LogJoinWait()
+    {
+        float now = UnityEngine.Time.unscaledTime;
+        if (_joinWaitLogAt < 0f) { _joinWaitLogAt = now + 40f; return; } // a normal load takes ~30 s
+        if (now < _joinWaitLogAt) return;
+        _joinWaitLogAt = now + 10f;
+        var sd = SessionData.Instance;
+        var cc = CityConstructor.Instance;
+        Plugin.Event($"SNAPSHOT join still waiting: play={(sd != null && sd.play)} startedGame={(sd != null && sd.startedGame)} city={(CityData.Instance != null)} " +
+                     $"loaded={(cc != null && cc.isLoaded)} loading={(cc != null && cc.loadingOperationActive)} preSim={(cc != null && cc.preSimActive)} " +
+                     $"worldReady={World.Ready} sawLoading={_sawLoading} worldPaused={Patches.PauseSync.WorldPaused} localPaused={Patches.PauseSync.LocalPaused} " +
+                     $"menu={(MainMenuController.Instance != null && MainMenuController.Instance.mainMenuActive)}");
+    }
+
     public static void CleanupAfterLoad()
     {
         if (_gcPausedAt >= 0f && UnityEngine.Time.unscaledTime - _gcPausedAt > GcMaxPause) ResumeGc("the load is taking too long");
         if (_pendingDelete == null) return;
+        LogJoinWait();
         // Wait for the load to actually happen (the old world is still running when it starts).
         if (SessionData.Instance == null || !SessionData.Instance.play || CityData.Instance == null) { _sawLoading = true; return; }
         if (!_sawLoading) return;
@@ -316,5 +345,6 @@ public static class SnapshotSync
         try { File.Delete(_pendingDelete); Plugin.Event("SNAPSHOT joined world is running; removed the temporary 'MP Join' save"); }
         catch (Exception e) { Plugin.Event($"SNAPSHOT could not remove {_pendingDelete}: {e.Message}"); }
         _pendingDelete = null;
+        _joinWaitLogAt = -1f;
     }
 }
