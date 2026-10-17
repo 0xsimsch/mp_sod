@@ -261,6 +261,7 @@ public static class WorldSync
     /// <summary>Host, per frame: resend the current weather target now and then (late joiners, lost packets).</summary>
     public static void HostTick(float now)
     {
+        if (IsHost && World.Ready && now >= _nextWindows) { _nextWindows = now + WindowScan; ScanBrokenWindows(); }
         if (!IsHost || !World.Ready || now < _nextWeather) return;
         _nextWeather = now + WeatherResend;
         var sd = SessionData.Instance;
@@ -510,6 +511,31 @@ public static class WorldSync
 
     // ------------------------------------------------------------------ windows (item 11)
 
+    // Host: every broken window goes to clients, wherever it is. Seen: a window shot out in a murder was broken on the
+    // host only: BreakWindow was only sent near a client, and a break where nothing is loaded may never call
+    // BreakWindow at all (the game just records it in GameplayController.brokenWindows, the list the save keeps).
+    // So the host also watches that list and sends new entries. Clients that join later get the list in the save.
+    const float WindowScan = 2f;
+    static float _nextWindows;
+    static readonly HashSet<Vector3> _knownBroken = new();
+    static int _knownGeneration = -1;
+
+    static void ScanBrokenWindows()
+    {
+        var broken = GameplayController.Instance?.brokenWindows;
+        if (broken == null) return;
+        bool seed = _knownGeneration != World.Generation;
+        if (seed) { _knownBroken.Clear(); _knownGeneration = World.Generation; }
+        int sent = 0;
+        foreach (var kv in broken)
+        {
+            if (!_knownBroken.Add(kv.Key) || seed) continue; // first scan of a world: those are in every client's save
+            Send(new WorldEventMsg { Kind = WorldEventKind.Window, ByPlayer = NoPlayer, V0 = kv.Key, V1 = kv.Key, V2 = Vector3.zero, F0 = kv.Value });
+            sent++;
+        }
+        if (sent > 0) Plugin.Event($"WORLD {sent} newly broken window(s) sent to clients");
+    }
+
     [HarmonyPatch(typeof(BreakableWindowController), nameof(BreakableWindowController.BreakWindow))]
     static class WindowBroken
     {
@@ -518,7 +544,9 @@ public static class WorldSync
             if (_applying || !InSession) return;
             var key = __instance.GetRoughPosition();
             bool mine = IsLocal(brokenBy);
-            if (IsClient ? !mine : !(mine || NearRemotePlayer(key))) return;
+            // Host: every break (citizens' too, e.g. a murderer's shot), not just near a client. Client: its own breaks.
+            if (IsClient && !mine) return;
+            if (IsHost) _knownBroken.Add(key);
             Send(new WorldEventMsg
             {
                 Kind = WorldEventKind.Window, ByPlayer = PlayerIdOf(brokenBy),
@@ -537,15 +565,19 @@ public static class WorldSync
         BreakableWindowController window = null;
         foreach (var w in UnityEngine.Object.FindObjectsOfType<BreakableWindowController>())
             if (w != null && (w.GetRoughPosition() - m.V0).sqrMagnitude < 0.01f) { window = w; break; }
-        if (window != null)
+        if (IsHost) _knownBroken.Add(m.V0);
+        if (window != null && !window.isBroken)
         {
-            if (window.isBroken) return;
-            window.SetBroken(true);
+            window.SetBroken(true); // the game records it in brokenWindows itself
             window.Shatter(m.V1, m.V2);
-            return;
+            Plugin.Event($"WORLD window at {m.V0} broken (from {(m.ByPlayer == NoPlayer ? "the host's world" : $"P{m.ByPlayer}")})");
         }
         var broken = GameplayController.Instance?.brokenWindows;
-        if (broken != null && !broken.ContainsKey(m.V0)) broken.Add(m.V0, SessionData.Instance != null ? SessionData.Instance.gameTime : m.F0);
+        if (broken != null && !broken.ContainsKey(m.V0))
+        {
+            broken.Add(m.V0, m.F0 > 0f ? m.F0 : SessionData.Instance != null ? SessionData.Instance.gameTime : 0f);
+            if (window == null) Plugin.Event($"WORLD window at {m.V0} recorded broken (not loaded here; it loads broken)");
+        }
     }
 
     // ------------------------------------------------------------------ doors: wedges, tape, barging (item 17)
