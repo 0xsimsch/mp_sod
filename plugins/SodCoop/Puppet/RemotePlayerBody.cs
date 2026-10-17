@@ -123,6 +123,7 @@ public sealed class RemotePlayerBody
             _marker.Ensure(Human, Owner.Id.Value);
             DropCitizenProps();
             if (!_combatShown) ArmWith(null);
+            RepairOutfit();
             var outfit = OutfitStatus();
             if (outfit != _lastOutfitStatus) { _lastOutfitStatus = outfit; Plugin.Event($"{Owner} body outfit: {outfit}, {dist:F0} m, visible={Human.visible}"); }
         }
@@ -568,16 +569,55 @@ public sealed class RemotePlayerBody
         {
             var oc = Human.outfitController;
             string outfit = oc == null ? "no controller" : $"current={oc.currentOutfit} loaded={oc.loadedOutfit}";
-            int on = 0, total = 0, skinOn = 0, skinTotal = 0;
+            int on = 0, total = 0, skinOn = 0, skinTotal = 0, far = 0, empty = 0;
+            var at = Human.transform.position;
             foreach (var r in Human.GetComponentsInChildren<Renderer>(true))
             {
                 bool shown = r.enabled && r.gameObject.activeInHierarchy;
                 total++; if (shown) on++;
                 if (r.TryCast<SkinnedMeshRenderer>() != null) { skinTotal++; if (shown) skinOn++; }
+                if (!shown) continue;
+                var b = r.bounds;
+                if (b.size.sqrMagnitude < 1e-6f) empty++;
+                else if ((b.center - at).sqrMagnitude > 9f) far++;
             }
-            return $"{outfit}, renderers {on}/{total}, skinned {skinOn}/{skinTotal}";
+            _outfitFar = far;
+            return $"{outfit}, renderers {on}/{total}, skinned {skinOn}/{skinTotal}, far {far}, empty {empty}";
         }
         catch (System.Exception e) { return $"? ({e.Message})"; }
+    }
+
+    // The missing-clothes bug (only head, hands and feet drawn) came back with all 40 renderers on and the outfit
+    // loaded: right when the body jumped from the borrowed citizen's spot (60 m) to the player (6 m) and the game swapped
+    // the outfit (casual -> outdoorsCasual). The clothes evidently didn't follow. Reload the outfit after such a jump, or
+    // when renderers sit more than 3 m from the body; at most every 5 s.
+    int _outfitFar;
+    Vector3 _lastBodyPos;
+    bool _hasLastBodyPos;
+    float _reloadOutfitAt = -1f, _nextOutfitReload;
+    int _outfitReloads;
+
+    void RepairOutfit()
+    {
+        float now = Time.unscaledTime;
+        var pos = Human.transform.position;
+        if (_hasLastBodyPos && (pos - _lastBodyPos).sqrMagnitude > 100f && _reloadOutfitAt < 0f) { _reloadOutfitAt = now + 1f; _outfitReloads = 0; }
+        _lastBodyPos = pos;
+        _hasLastBodyPos = true;
+        bool due = (_reloadOutfitAt >= 0f && now >= _reloadOutfitAt) || _outfitFar > 0;
+        if (!due || now < _nextOutfitReload || Hidden || _outfitReloads >= 3) return; // 3 tries per jump, not forever
+        var oc = Human.outfitController;
+        if (oc == null) return;
+        string why = _outfitFar > 0 ? $"{_outfitFar} renderer(s) away from the body" : "the body jumped";
+        _reloadOutfitAt = -1f;
+        _nextOutfitReload = now + 5f;
+        _outfitReloads++;
+        try
+        {
+            oc.SetCurrentOutfit(oc.currentOutfit, true, true, true);
+            Plugin.Event($"{Owner} body outfit reloaded ({why}): {OutfitStatus()}");
+        }
+        catch (System.Exception e) { Plugin.Event($"{Owner} body outfit reload failed: {e.Message}"); }
     }
 
     public bool Stale => Human == null || Human.WasCollected || Generation != Core.World.Generation;

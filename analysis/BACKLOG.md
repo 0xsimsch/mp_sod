@@ -24,7 +24,12 @@ Normal case (2026-10-16 rejoin, same citizen 3, clothes shown): `current=casual 
 skinned 0/0`. Citizens use plain MeshRenderers, no skinned meshes, so watch the `renderers` count and whether
 `loaded` matches `current`. The bug did not happen on that rejoin, so it is intermittent. Waiting for a bad case.
 
-**Fix to try:**
+**Bad case logged (2026-10-17 19:46, 0.9.36):** `current=outdoorsCasual loaded=outdoorsCasual, renderers 40/40`, so
+all on and loaded, yet only head/hands/feet visible. It happened as the body jumped 60 m → 6 m while the game swapped
+the outfit (casual → outdoorsCasual). **0.9.38** reloads the outfit 1 s after a jump >10 m or when renderers sit >3 m
+from the body (max 3 tries), and logs `far`/`empty` renderer counts.
+
+**Original fix idea:**
 1. Confirm first. Log `outfitController.currentOutfit`, `loadedOutfit` and the count of enabled
    `SkinnedMeshRenderer`s under the body in the overlay or event log. `SodProbe` already counts renderers per citizen.
 2. In `RemotePlayerBody.Possess` and in `KeepShown` (when the body is near and not `Hidden`): if the outfit isn't
