@@ -42,23 +42,6 @@ public static class KoView
         _smoothPos = Vector3.Lerp(_smoothPos == Vector3.zero ? want : _smoothPos, want, Mathf.Clamp01(Time.deltaTime * 6f));
         _cam.transform.position = _smoothPos;
         _cam.transform.rotation = Quaternion.LookRotation(head - _smoothPos, Vector3.up);
-        ClearBlackout();
-    }
-
-    /// <summary>
-    /// The game's KO screen is a full-screen black UI element (<c>InterfaceController.fadeOverlay</c>, its alpha driven
-    /// every frame by the FadeGame coroutine). UI overlays draw over every camera, so the partner view ran behind solid
-    /// black (seen: "Recovering…" on black, the partner never shown). Coroutines run before LateUpdate, so clearing the
-    /// alpha here wins for this frame; the game's own fade takes over again once the view stops.
-    /// </summary>
-    static void ClearBlackout()
-    {
-        try
-        {
-            var overlay = InterfaceController.Instance != null ? InterfaceController.Instance.fadeOverlay : null;
-            if (overlay != null && !overlay.WasCollected && overlay.GetAlpha() > 0f) overlay.SetAlpha(0f);
-        }
-        catch { /* best effort: the view still works without it, behind the fade */ }
     }
 
     static bool Start()
