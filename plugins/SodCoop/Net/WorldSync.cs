@@ -372,7 +372,8 @@ public static class WorldSync
                 _isBreaker[__instance.id] = isBreaker = __instance.controller.GetComponentInChildren<BreakerController>() != null;
             if (!isBreaker) return;
             var pos = __instance.wPos;
-            if (IsClient ? !NearLocalPlayer(pos) : !(NearRemotePlayer(pos) || NearLocalPlayer(pos))) return;
+            // Host: every breaker, wherever (power stays off until someone resets it, like a broken window stays broken).
+            if (IsClient && !NearLocalPlayer(pos)) return;
             Send(new WorldEventMsg { Kind = WorldEventKind.Breaker, ByPlayer = NoPlayer, I0 = __instance.id, F0 = newValue });
         }
     }
@@ -586,7 +587,11 @@ public static class WorldSync
     {
         if (_applying || !InSession || !TryDoorKey(door, out var key)) return;
         bool mine = actor == null || IsLocal(actor); // jam/tape have no actor: whoever's machine did it reports it
-        if (IsClient ? !(mine && NearLocalPlayer(door.transform.position)) : !(mine || NearRemotePlayer(door.transform.position))) return;
+        // Host: police tape and barged doors anywhere, like broken windows: the police tape a crime scene and barge its
+        // door long before a client gets there, and both stay. Wedge jams near a client only (players' own are sent).
+        bool everywhere = kind is WorldEventKind.DoorTape or WorldEventKind.DoorBarge;
+        if (IsClient ? !(mine && NearLocalPlayer(door.transform.position))
+                     : !(mine || everywhere || NearRemotePlayer(door.transform.position))) return;
         var by = actor != null ? PlayerIdOf(actor) : NoPlayer;
         var h = actor?.TryCast<Human>();
         Send(new WorldEventMsg { Kind = kind, ByPlayer = by, I0 = key, B0 = val, I1 = kind == WorldEventKind.DoorBarge ? (h != null ? h.humanID : -1) : extra });
