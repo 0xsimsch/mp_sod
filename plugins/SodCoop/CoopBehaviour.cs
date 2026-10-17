@@ -7,7 +7,7 @@ using UnityEngine;
 namespace SodCoop;
 
 /// <summary>
-/// Per-frame driver. Prototype debug keys:
+/// Per-frame driver. Prototype debug keys (Insert…PageDown and Ctrl+F11 need [Debug] TestKeys = true):
 ///   Keys avoid F-keys the game or Steam use (tested the hard way: F5 is the game's quicksave and
 ///   overwrote the player's "Quick Save"; F12 is Steam's screenshot key).
 ///   Insert    add a second player (P1) as a ghost that replays your movement 3 s behind you
@@ -132,14 +132,7 @@ public class CoopBehaviour : MonoBehaviour
     void HandleKeys()
     {
         bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-        if (Input.GetKeyDown(KeyCode.Insert) && ctrl) TalkToNearestCitizen();
-        else if (Input.GetKeyDown(KeyCode.Insert)) AddGhostPlayer();
-        if (Input.GetKeyDown(KeyCode.Home) && ctrl) SteamLoopbackTest();
-        else if (Input.GetKeyDown(KeyCode.Home)) ToggleFreeze();
-        if (Input.GetKeyDown(KeyCode.End) && !ctrl) TrespassTest();
-        if (Input.GetKeyDown(KeyCode.Delete) && !ctrl) RemoveRemotePlayers();
-        if (Input.GetKeyDown(KeyCode.PageUp) && !ctrl) JoinRemotePlayer();
-        if (Input.GetKeyDown(KeyCode.PageDown) && !ctrl) ToggleIllegalAction();
+        if (Plugin.TestKeys) HandleTestKeys(ctrl);
         if (Input.GetKeyDown(KeyCode.F10) && ctrl)
         {
             SessionOverlay.Visible = !SessionOverlay.Visible;
@@ -151,6 +144,27 @@ public class CoopBehaviour : MonoBehaviour
             if (!RoomLoading) RemoteRoomLoader.ReleaseAll();
             Plugin.Event($"F10: remote room loading = {RoomLoading}");
         }
+        bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+        if (Input.GetKeyDown(KeyCode.F11) && alt) SwapHostJoin();
+        else if (Input.GetKeyDown(KeyCode.F11) && ctrl) { if (Plugin.TestKeys) PinTestEvidence(); }
+        else if (Input.GetKeyDown(KeyCode.F11)) StartOrInvite();
+        if (Input.GetKeyDown(KeyCode.Delete) && ctrl && NetSession.Current != null) NetSession.Current.Dispose();
+    }
+
+    /// <summary>
+    /// Prototype test keys, only with [Debug] TestKeys = true. They used to be always on: pressing PageUp in play
+    /// teleported the player to the other player's body (seen: "the host was teleported to the client").
+    /// </summary>
+    void HandleTestKeys(bool ctrl)
+    {
+        if (Input.GetKeyDown(KeyCode.Insert) && ctrl) TalkToNearestCitizen();
+        else if (Input.GetKeyDown(KeyCode.Insert)) AddGhostPlayer();
+        if (Input.GetKeyDown(KeyCode.Home) && ctrl) SteamLoopbackTest();
+        else if (Input.GetKeyDown(KeyCode.Home)) ToggleFreeze();
+        if (Input.GetKeyDown(KeyCode.End) && !ctrl) TrespassTest();
+        if (Input.GetKeyDown(KeyCode.Delete) && !ctrl) RemoveRemotePlayers();
+        if (Input.GetKeyDown(KeyCode.PageUp) && !ctrl) JoinRemotePlayer();
+        if (Input.GetKeyDown(KeyCode.PageDown) && !ctrl) ToggleIllegalAction();
         if (Input.GetKeyDown(KeyCode.PageDown) && ctrl) StartSnapshotTest();
         if (Input.GetKeyDown(KeyCode.PageUp) && ctrl)
         {
@@ -158,11 +172,6 @@ public class CoopBehaviour : MonoBehaviour
             Application.targetFrameRate = -1;
             Plugin.Event($"Ctrl+PageUp: frame cap removed for measurement (runInBackground={Application.runInBackground})");
         }
-        bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
-        if (Input.GetKeyDown(KeyCode.F11) && alt) SwapHostJoin();
-        else if (Input.GetKeyDown(KeyCode.F11) && ctrl) PinTestEvidence();
-        else if (Input.GetKeyDown(KeyCode.F11)) StartOrInvite();
-        if (Input.GetKeyDown(KeyCode.Delete) && ctrl && NetSession.Current != null) NetSession.Current.Dispose();
     }
 
     /// <summary>

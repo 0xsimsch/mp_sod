@@ -13,6 +13,9 @@ namespace SodCoop;
 [BepInPlugin(Guid, "SoD Co-op", Net.NetSession.ModVersion)]
 public class Plugin : BasePlugin
 {
+    /// <summary>[Debug] TestKeys: the prototype test keys are on (off for normal play).</summary>
+    public static bool TestKeys { get; private set; }
+
     public const string Guid = "mp_sod.coop";
 
     internal static Plugin Instance;
@@ -30,6 +33,9 @@ public class Plugin : BasePlugin
         var maxPlayers = Config.Bind("Session", "MaxPlayers", 2, "Maximum players per session (host included).");
         PlayerRegistry.MaxPlayers = maxPlayers.Value;
         NetConfig.Bind(Config);
+        TestKeys = Config.Bind("Debug", "TestKeys", false,
+            "Prototype test keys (Insert, Home, End, Delete, PageUp, PageDown and their Ctrl variants, Ctrl+F11). " +
+            "Off for play: PageUp teleports you to the other player, Delete removes their body, End puts it in a far home.").Value;
 
         PatchEach(new Harmony(Guid));
 
