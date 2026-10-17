@@ -141,21 +141,41 @@ public static class RestSync
         TimeSync.Dirty = true;
     }
 
-    /// <summary>A KO waits for game time that only skips when everyone rests: recover after a short real time instead.</summary>
+    /// <summary>
+    /// A KO waits for game time that only skips when everyone rests: recover after a short real time instead. The game
+    /// counts <c>Player.KOTimePassed</c> up to <c>KOTime</c> in game time and wakes the player in <c>Player.Update</c>; with
+    /// time at normal speed that took many minutes ("Recovering…" barely moving). So the fallback fills the counter and
+    /// the game does its own wake-up. (Before 0.9.35 it called <c>TriggerPlayerRecovery</c>, which returns at once while
+    /// <c>playerKOInProgress</c> is set: the player stayed down and it repeated every 20 s.)
+    /// </summary>
+    static bool _koFilled;
+
     static void KoFallback(float now, RestKind local)
     {
-        if (local != RestKind.KO) { _koSince = -1f; return; }
+        if (local != RestKind.KO) { _koSince = -1f; _koFilled = false; return; }
         if (_koSince < 0f) _koSince = now;
         var sd = SessionData.Instance;
         bool skipping = sd != null && sd.currentTimeSpeed > SessionData.TimeSpeed.normal && (!IsHost || AllResting);
         if (skipping || now - _koSince < KoRealSeconds) return;
-        _koSince = -1f;
-        try
+        var p = Player.Instance;
+        if (p == null) return;
+        if (!_koFilled)
         {
-            Player.Instance.TriggerPlayerRecovery();
-            Plugin.Event($"REST recovered from KO after {KoRealSeconds:F0} s (time doesn't skip while others are up)");
+            _koFilled = true;
+            try
+            {
+                float before = p.KOTimePassed;
+                p.KOTimePassed = Mathf.Max(p.KOTimePassed, p.KOTime);
+                Plugin.Event($"REST KO for {KoRealSeconds:F0} s (time doesn't skip while others are up): recovery counter {before:F2} -> {p.KOTimePassed:F2} of {p.KOTime:F2}, the game wakes us up");
+            }
+            catch (Exception e) { Plugin.Event($"REST KO recovery failed: {e.Message}"); }
         }
-        catch (Exception e) { Plugin.Event($"REST KO recovery failed: {e.Message}"); }
+        else if (now - _koSince > KoRealSeconds + 10f && _koSince > 0f)
+        {
+            Plugin.Event($"REST still knocked out 10 s after filling the recovery counter ({p.KOTimePassed:F2} of {p.KOTime:F2})");
+            _koSince = now - KoRealSeconds; // look again in 10 s
+            _koFilled = false;               // and fill again (the game may have reset it)
+        }
     }
 
     // ------------------------------------------------------------------ host: the game's own speed-up
