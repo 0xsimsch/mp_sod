@@ -16,7 +16,8 @@ namespace SodCoop.Net;
 ///   then; otherwise the host's clock stays at normal speed. Clients report their rest state (msg 52) and follow the
 ///   host's clock and speed through TimeSync (their own SetTimeSpeed stays blocked there).</item>
 /// <item>A player resting alone sees "waiting for &lt;partner&gt;", and the partner a notice.</item>
-/// <item>KO never skips time in a session. The game's KO (Player.Update): fall and fade to black, then teleport to a bed,
+/// <item>A KO'd player counts as resting while someone else sleeps or waits: then time skips for everyone (and the
+///   KO ends sooner). A KO alone, or everyone KO'd, never skips time in a session. The game's KO (Player.Update): fall and fade to black, then teleport to a bed,
 ///   then wait <c>KOTime</c> game hours with the clock forced to veryFast, then fade in and wake. Here the clock stays at
 ///   normal speed (<see cref="NoKoSpeedUp"/>), so the wait (1.5 game hours) takes 10 real minutes instead of 15 s.
 ///   The game's own end of the wait and wake-up undo the KO state (fade, progress bar, disabled actions, pause,
@@ -68,7 +69,7 @@ public static class RestSync
     {
         var p = Player.Instance;
         if (p == null) return RestKind.None;
-        if (p.playerKOInProgress) return RestKind.KO;
+        if (p.playerKOInProgress) return KoWaking ? RestKind.None : RestKind.KO;
         if (!p.spendingTimeMode) return RestKind.None;
         return p.isAsleep ? RestKind.Sleep : RestKind.Wait;
     }
@@ -128,14 +129,17 @@ public static class RestSync
 
     static void HostTick(RestKind hostRest, IEnumerable<PlayerId> clients)
     {
-        // A KO'd player doesn't count as resting: a KO never skips time in a session.
-        bool any = false, all = hostRest is not (RestKind.None or RestKind.KO);
+        // A KO'd player goes along with the others' rest, but a KO alone never skips time in a session.
+        bool any = false, all = hostRest != RestKind.None, someoneRests = hostRest is RestKind.Sleep or RestKind.Wait;
         foreach (var c in clients)
         {
             any = true;
-            if (!_clientRest.TryGetValue(c, out var k) || k is RestKind.None or RestKind.KO) all = false;
+            _clientRest.TryGetValue(c, out var k);
+            if (k == RestKind.None) all = false;
+            if (k is RestKind.Sleep or RestKind.Wait) someoneRests = true;
         }
         if (!any) { AllResting = hostRest != RestKind.None; return; } // alone: the game's own behaviour
+        all &= someoneRests;
         if (all != AllResting)
         {
             AllResting = all;
@@ -143,8 +147,12 @@ public static class RestSync
             if (all) Notify.Broadcast("Everyone is resting — time passes", InterfaceControls.Icon.agent);
         }
         var sd = SessionData.Instance;
-        if (sd == null || hostRest is RestKind.None or RestKind.KO) return; // an awake (or KO'd) host runs its clock as usual
-        var want = AllResting ? _restSpeed : SessionData.TimeSpeed.normal;
+        if (sd == null || hostRest == RestKind.None) return; // an awake host runs its clock as usual
+        // A KO'd host speeds up only once the game's KO wait has started (progress bar up): the game sets that up only
+        // while the speed isn't veryFast yet.
+        bool koWaiting = hostRest != RestKind.KO
+            || (Player.Instance.playerKOFadeOut && InteractionController.Instance != null && InteractionController.Instance.activeInteractionAction);
+        var want = AllResting && koWaiting ? _restSpeed : SessionData.TimeSpeed.normal;
         if (sd.currentTimeSpeed != want) SetSpeed(sd, want);
     }
 
@@ -156,12 +164,13 @@ public static class RestSync
         TimeSync.Dirty = true;
     }
 
-    /// <summary>A KO in a session never speeds up the clock (the game sets veryFast for the KO wait).</summary>
+    /// <summary>A KO in a session never speeds up the clock (the game sets veryFast for the KO wait). The host's clock
+    /// (TimeSync on a client) and the host's own rest speed-up still get through.</summary>
     [HarmonyPatch(typeof(SessionData), nameof(SessionData.SetTimeSpeed))]
     static class NoKoSpeedUp
     {
         static bool Prefix(SessionData.TimeSpeed newTimeSpeed) =>
-            _settingSpeed || newTimeSpeed <= SessionData.TimeSpeed.normal || !LocalKoInSession();
+            _settingSpeed || TimeSync.Applying || newTimeSpeed <= SessionData.TimeSpeed.normal || !LocalKoInSession();
     }
 
     /// <summary>
@@ -212,9 +221,15 @@ public static class RestSync
             var sd = SessionData.Instance;
             if (sd == null) return;
             if (sd.currentTimeSpeed > SessionData.TimeSpeed.normal) _restSpeed = sd.currentTimeSpeed;
-            bool others = false;
-            foreach (var p in PlayerRegistry.All) if (!p.IsLocal) { others = true; break; }
-            if (others && !AllResting && sd.currentTimeSpeed != SessionData.TimeSpeed.normal)
+            bool others = false, othersRest = true;
+            foreach (var p in PlayerRegistry.All)
+            {
+                if (p.IsLocal) continue;
+                others = true;
+                if (!_clientRest.TryGetValue(p.Id, out var k) || k == RestKind.None) othersRest = false;
+            }
+            // Partners all asleep, waiting or KO'd: HostTick lets time pass on its next frame.
+            if (others && !othersRest && !AllResting && sd.currentTimeSpeed != SessionData.TimeSpeed.normal)
             {
                 SetSpeed(sd, SessionData.TimeSpeed.normal);
                 Notify.Show("Waiting for your partner to rest too", InterfaceControls.Icon.agent);
