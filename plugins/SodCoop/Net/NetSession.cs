@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.46";
+    public const string ModVersion = "0.9.47";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;

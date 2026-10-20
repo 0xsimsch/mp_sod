@@ -267,6 +267,8 @@ public static class SnapshotSync
 
     static string _pendingDelete;
     static bool _sawLoading;
+    static int _generationAtLoad;
+    static float _loadStartedAt;
     static int _keepMoney = -1;
 
     /// <summary>
@@ -287,6 +289,8 @@ public static class SnapshotSync
             rs.newGameLoadCity = false;
             _pendingDelete = path;
             _sawLoading = false;
+            _generationAtLoad = World.Generation;
+            _loadStartedAt = UnityEngine.Time.unscaledTime;
             _joinWaitLogAt = -1f;
             // Design: money is per player. The snapshot carries the host's, so keep ours.
             // Joined from the main menu: no money of our own yet, so take the save's.
@@ -304,6 +308,9 @@ public static class SnapshotSync
 
     /// <summary>Per frame on clients: once the joined world runs, remove the temporary save again.</summary>
     static float _joinWaitLogAt = -1f;
+
+    /// <summary>A load takes ~30 s; a world still running without a seen load after this is the joined one.</summary>
+    const float JoinLoadGiveUp = 120f;
 
     /// <summary>
     /// Diagnostics (seen with 0.9.36: the world loaded but "joined world is running" never came, the player couldn't
@@ -328,9 +335,17 @@ public static class SnapshotSync
         if (_gcPausedAt >= 0f && UnityEngine.Time.unscaledTime - _gcPausedAt > GcMaxPause) ResumeGc("the load is taking too long");
         if (_pendingDelete == null) return;
         LogJoinWait();
-        // Wait for the load to actually happen (the old world is still running when it starts).
-        if (SessionData.Instance == null || !SessionData.Instance.play || CityData.Instance == null) { _sawLoading = true; return; }
-        if (!_sawLoading) return;
+        // Wait for the load to actually happen (the old world is still running when it starts). Joining from inside a
+        // world, play stayed true and CityData kept its object through the whole load, so only the city constructor
+        // showed it (seen with 0.9.46: the join never finished and the host held our events, its body included, 5 min).
+        bool loading = SessionData.Instance == null || !SessionData.Instance.play || CityData.Instance == null || !World.Ready;
+        if (loading || World.Generation != _generationAtLoad) _sawLoading = true;
+        if (loading) return;
+        if (!_sawLoading)
+        {
+            if (UnityEngine.Time.unscaledTime - _loadStartedAt < JoinLoadGiveUp) return;
+            Plugin.Event($"SNAPSHOT never saw the load happen; taking the running world as the host's after {JoinLoadGiveUp:F0} s");
+        }
         if (_keepMoney >= 0 && GameplayController.Instance != null)
         {
             int hostMoney = GameplayController.Instance.money;
