@@ -18,8 +18,8 @@ namespace SodCoop.Net;
 /// <item>A player resting alone sees "waiting for &lt;partner&gt;", and the partner a notice.</item>
 /// <item>KO never skips time in a session. The game's KO (Player.Update): fall and fade to black, then teleport to a bed,
 ///   then wait <c>KOTime</c> game hours with the clock forced to veryFast, then fade in and wake. Here the clock stays at
-///   normal speed (<see cref="NoKoSpeedUp"/>), the wait ends after <see cref="KoRealSeconds"/> real seconds
-///   (<see cref="KoFallback"/>), and the game's own end of the wait and wake-up undo the KO state (speed, fade,
+///   normal speed (<see cref="NoKoSpeedUp"/>), and the wait counter runs as fast as it would at veryFast, so a KO
+///   lasts as long as in single player (<see cref="KoFallback"/>), and the game's own end of the wait and wake-up undo the KO state (speed, fade,
 ///   progress bar, disabled actions, pause, playerKOInProgress).</item>
 /// </list>
 /// Clients need TimeSync.BlockSpendTime gone (it refused a client's sleep/wait entirely); the speed-up inside is still
@@ -29,7 +29,6 @@ public static class RestSync
 {
     public const byte MsgRestState = 52;
     const ushort Magic = 0x4D53;
-    const float KoRealSeconds = 20f;
 
     public enum RestKind : byte { None = 0, Sleep = 1, Wait = 2, KO = 3 }
 
@@ -37,11 +36,29 @@ public static class RestSync
     static RestKind _lastLocal;
     static SessionData.TimeSpeed _restSpeed = SessionData.TimeSpeed.veryFast;
     static bool _settingSpeed;
-    static float _koSince = -1f;
+    static float _koSince = -1f;   // KO wait started (in the bed), real time
 
     /// <summary>Local KO recovery, 0..1, or -1 when not KO'd or already waking up (for the KO view).</summary>
-    public static float KoProgress => _koSince < 0f || KoWaking ? -1f : Mathf.Clamp01((Time.unscaledTime - _koSince) / KoRealSeconds);
-    public static float KoSecondsLeft => _koSince < 0f ? 0f : Mathf.Max(0f, KoRealSeconds - (Time.unscaledTime - _koSince));
+    public static float KoProgress
+    {
+        get
+        {
+            var p = Player.Instance;
+            if (_koSince < 0f || KoWaking || p == null || p.KOTime <= 0f) return -1f;
+            return Mathf.Clamp01(p.KOTimePassed / p.KOTime);
+        }
+    }
+
+    /// <summary>Estimated from the progress so far.</summary>
+    public static float KoSecondsLeft
+    {
+        get
+        {
+            float p = KoProgress;
+            if (p <= 0.02f) return 0f;
+            return (Time.unscaledTime - _koSince) * (1f - p) / p;
+        }
+    }
 
     public static int Sent { get; private set; }
 
@@ -165,25 +182,34 @@ public static class RestSync
     }
 
     /// <summary>
-    /// The KO wait counts <c>Player.KOTimePassed</c> up to <c>KOTime</c> in game hours, which at normal speed takes many
-    /// minutes. After <see cref="KoRealSeconds"/> real seconds, and only once the player lies in the bed
-    /// (<c>playerKOFadeOut</c>: teleport and heal done), put the counter just below <c>KOTime</c>: the next frame's
-    /// increment crosses it inside the game's wait branch, which then ends the wait itself (time speed back to normal,
-    /// fade in, progress bar gone, interaction action completed) and later wakes the player (playerKOInProgress off,
-    /// pause and actions enabled again). Filling the counter up to <c>KOTime</c> would skip that branch and leave the
-    /// player knocked out for good (0.9.35). <c>TriggerPlayerRecovery</c> does nothing during a KO.
+    /// The KO wait counts <c>Player.KOTimePassed</c> up to <c>KOTime</c> in game hours; the game forces veryFast for it, so
+    /// it lasts a few real seconds. Here the clock stays at normal speed, so add the difference each frame: the counter
+    /// advances as if the clock ran at veryFast (<c>GameplayControls.timeMultipliers</c>) and the KO takes as long as in
+    /// single player. Only once the player lies in the bed (<c>playerKOFadeOut</c>: teleport and heal done), and only up to
+    /// just below <c>KOTime</c>: the game's own increment must cross it inside its wait branch, which then ends the wait
+    /// (time speed, fade in, progress bar, interaction action) and later wakes the player (playerKOInProgress off, pause
+    /// and actions enabled again). Filling the counter up to <c>KOTime</c> would skip that branch and leave the player
+    /// knocked out for good (0.9.35). <c>TriggerPlayerRecovery</c> does nothing during a KO.
     /// </summary>
     static void KoFallback(float now, RestKind local)
     {
         if (local != RestKind.KO) { _koSince = -1f; return; }
-        if (_koSince < 0f) _koSince = now;
-        if (now - _koSince < KoRealSeconds || !LocalKoInSession()) return;
+        if (!LocalKoInSession()) return;
         var p = Player.Instance;
         if (!p.playerKOFadeOut || p.KOTimePassed >= p.KOTime) return;
-        float target = p.KOTime - 1e-4f;
-        if (p.KOTimePassed >= target) return;
-        Plugin.Event($"REST KO for {now - _koSince:F0} s: recovery counter {p.KOTimePassed:F3} -> {target:F3} of {p.KOTime:F3}, the game wakes us up");
-        p.KOTimePassed = target;
+        if (_koSince < 0f)
+        {
+            _koSince = now;
+            Plugin.Event($"REST KO: waiting {p.KOTime:F2} game hours at veryFast pace, time stays at normal speed");
+        }
+        var sd = SessionData.Instance;
+        var mults = GameplayControls.Instance?.timeMultipliers;
+        if (sd == null || mults == null || mults.Count <= (int)SessionData.TimeSpeed.veryFast || sd.currentTimeMultiplier <= 0f) return;
+        float ratio = mults[(int)SessionData.TimeSpeed.veryFast] / sd.currentTimeMultiplier;
+        if (ratio <= 1f) return;
+        float extra = (float)sd.gameTimePassedThisFrame * (ratio - 1f);
+        float target = Mathf.Min(p.KOTimePassed + extra, p.KOTime - 1e-4f);
+        if (target > p.KOTimePassed) p.KOTimePassed = target;
     }
 
     /// <summary>A KO in a session never speeds up the clock (the game sets veryFast for the KO wait).</summary>
