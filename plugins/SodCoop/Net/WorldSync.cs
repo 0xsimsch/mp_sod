@@ -226,8 +226,20 @@ public static class WorldSync
                     break;
                 }
                 case WorldEventKind.DoorBarge:
-                    Door(m.I0)?.Barge(ActorOf(m.ByPlayer, m.I1)); // same door damage, sound and NPC reaction here
+                {
+                    var door = Door(m.I0);
+                    if (door == null) break;
+                    // Same door damage, sound and NPC reaction here. A player's body is briefly not isPlayer: Barge runs
+                    // Player.Instance.TransformPlayerController (the barge transition through the door), a fine and
+                    // achievements for an isPlayer barger, so our own player was moved to the other player's door
+                    // (seen: "the client is teleported to the host" whenever the host barged a door, and the reverse).
+                    var barger = ActorOf(m.ByPlayer, m.I1);
+                    bool body = barger != null && barger.isPlayer && PlayerRegistry.IsRemoteBody(barger);
+                    if (body) barger.isPlayer = false;
+                    try { door.Barge(barger); }
+                    finally { if (body && !barger.WasCollected) barger.isPlayer = true; }
                     break;
+                }
                 case WorldEventKind.Switch:
                 {
                     var it = FindInteractable(m.I0);
