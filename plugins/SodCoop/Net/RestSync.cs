@@ -17,7 +17,7 @@ namespace SodCoop.Net;
 ///   host's clock and speed through TimeSync (their own SetTimeSpeed stays blocked there).</item>
 /// <item>A player resting alone sees "waiting for &lt;partner&gt;", and the partner a notice.</item>
 /// <item>A KO'd player counts as resting while someone else sleeps or waits: then time skips for everyone (and the
-///   KO ends sooner). A KO alone, or everyone KO'd, never skips time in a session. The game's KO (Player.Update): fall and fade to black, then teleport to a bed,
+///   KO ends sooner). Everyone KO'd skips time too. A KO alone (someone else awake) never skips time in a session. The game's KO (Player.Update): fall and fade to black, then teleport to a bed,
 ///   then wait <c>KOTime</c> game hours with the clock forced to veryFast, then fade in and wake. Here the clock stays at
 ///   normal speed (<see cref="NoKoSpeedUp"/>), so the wait (1.5 game hours) takes 10 real minutes instead of 15 s.
 ///   The game's own end of the wait and wake-up undo the KO state (fade, progress bar, disabled actions, pause,
@@ -129,17 +129,15 @@ public static class RestSync
 
     static void HostTick(RestKind hostRest, IEnumerable<PlayerId> clients)
     {
-        // A KO'd player goes along with the others' rest, but a KO alone never skips time in a session.
-        bool any = false, all = hostRest != RestKind.None, someoneRests = hostRest is RestKind.Sleep or RestKind.Wait;
+        // A KO'd player goes along with the others' rest (sleep, wait or KO), but a KO alone never skips time in a session.
+        bool any = false, all = hostRest != RestKind.None;
         foreach (var c in clients)
         {
             any = true;
             _clientRest.TryGetValue(c, out var k);
             if (k == RestKind.None) all = false;
-            if (k is RestKind.Sleep or RestKind.Wait) someoneRests = true;
         }
         if (!any) { AllResting = hostRest != RestKind.None; return; } // alone: the game's own behaviour
-        all &= someoneRests;
         if (all != AllResting)
         {
             AllResting = all;

@@ -144,7 +144,7 @@ From the first real tests with a friend (protocol v23):
 - `Net/BloodSync.cs` (msg 50): spatter polled from `GameplayController.spatter`; host's go to clients, clients' own near their player go to the host; other local spatter removed on clients.
 - `Net/NewsSync.cs` (msg 51): the host writes the newspaper; `CleanupController.TrashUpdate` off on clients.
 - `Net/Profiles.cs`: a client's money, lockpicks, social credit, passcodes, sync disks, apartments and inventory presets kept per host+city in `BepInEx/sodcoop_profiles/`, captured before loading the host's world and restored after.
-- `Net/RestSync.cs` (msg 52): time only speeds up while every player sleeps/waits/is KO'd; a KO with someone awake recovers after 20 s.
+- `Net/RestSync.cs` (msg 52): time only speeds up while every player sleeps/waits/is KO'd (everyone KO'd counts too); a KO with someone awake waits out the game's KO time at normal speed.
 - Story mode: F11 warns (does not block yet) when hosting a non-sandbox game.
 
 ## 0.8.0: side jobs, phones, dialog, case ids, pick-ups (protocol v32, untested in game)
