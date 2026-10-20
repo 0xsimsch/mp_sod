@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.47";
+    public const string ModVersion = "0.9.48";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -1097,11 +1097,28 @@ public sealed class NetSession : IDisposable
         target = h?.TryCast<Citizen>();
         if (target == null || target.isDead) return;
         Human attacker = PlayerRegistry.TryGet(hitter, out var p) ? p.RemoteBody?.Human : null;
+        var pos = new Vector3(m.Position.X, m.Position.Y, m.Position.Z);
+        var dir = new Vector3(m.Direction.X, m.Direction.Y, m.Direction.Z);
+        // The citizen standing for us on clients: the client hit the host.
+        if (_selfDouble != null && !_selfDouble.WasCollected && target.Pointer == _selfDouble.Pointer)
+        {
+            var me = Player.Instance;
+            if (me == null || attacker == null || PlayerRegistry.Local == null || IsRepeatedHit(attacker.humanID, PlayerRegistry.Local.Id)) return;
+            float before = me.currentHealth;
+            me.RecieveDamage(m.Amount, attacker, pos, dir, null, null);
+            Plugin.Event($"NET {hitter} hit us for {m.Amount:F2}: health {before:F2} -> {me.currentHealth:F2} / max {me.maximumHealth:F2}, koInProgress={me.playerKOInProgress}");
+            return;
+        }
+        // Another client's body: that player takes the hit.
+        if (PlayerRegistry.IsRemoteBody(target))
+        {
+            if (ForwardDamage(target, m.Amount, attacker, pos, dir)) Plugin.Event($"NET {hitter} hit {PlayerRegistry.RemoteOwnerOf(target)} for {m.Amount:F2}; forwarded");
+            return;
+        }
         Patches.DamageForward.ApplyingRemoteHit = true;
         try
         {
-            target.RecieveDamage(m.Amount, attacker, new Vector3(m.Position.X, m.Position.Y, m.Position.Z),
-                new Vector3(m.Direction.X, m.Direction.Y, m.Direction.Z), null, null);
+            target.RecieveDamage(m.Amount, attacker, pos, dir, null, null);
         }
         finally { Patches.DamageForward.ApplyingRemoteHit = false; }
         Plugin.Event($"NET {hitter} hit citizen {m.AttackerHumanId} for {m.Amount:F2}: health {target.currentHealth:F2}, ko={(target.ai != null && target.ai.ko)}");
@@ -1111,6 +1128,15 @@ public sealed class NetSession : IDisposable
     const float HitDedupWindow = 0.2f;
     readonly Dictionary<(int attacker, PlayerId target), float> _lastForwardedHit = new();
 
+    bool IsRepeatedHit(int attacker, PlayerId target)
+    {
+        var key = (attacker, target);
+        float t = Time.unscaledTime;
+        if (_lastForwardedHit.TryGetValue(key, out var lastHit) && t - lastHit < HitDedupWindow) return true;
+        _lastForwardedHit[key] = t;
+        return false;
+    }
+
     public bool ForwardDamage(Human body, float amount, Actor fromWho, Vector3 position, Vector3 direction)
     {
         if (Role != SessionRole.Host) return false;
@@ -1118,10 +1144,7 @@ public sealed class NetSession : IDisposable
         if (owner == null || !_peerOf.TryGetValue(owner.Id, out var peer)) return false;
         var attacker = fromWho != null ? fromWho.TryCast<Human>() : null;
         // Seen: the same hit sent 3-4 times in one millisecond (one swing, several colliders). Swallow the repeats.
-        var key = (attacker != null ? attacker.humanID : -1, owner.Id);
-        float t = Time.unscaledTime;
-        if (_lastForwardedHit.TryGetValue(key, out var lastHit) && t - lastHit < HitDedupWindow) return true;
-        _lastForwardedHit[key] = t;
+        if (IsRepeatedHit(attacker != null ? attacker.humanID : -1, owner.Id)) return true;
         SendTo(peer, Protocol.Damage(new DamageMsg
         {
             PlayerId = owner.Id.Value,

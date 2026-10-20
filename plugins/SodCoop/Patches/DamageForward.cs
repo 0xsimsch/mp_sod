@@ -29,8 +29,14 @@ static class DamageForward
                 return !session.ForwardCitizenHit(__instance, amount, damagePosition, damageDirection);
             return true;
         }
-        // Clients: local citizens never hurt another player's body; the host decides who gets hit.
-        if (session.Role == NetSession.SessionRole.Client) return false;
+        // Clients: local citizens never hurt another player's body; the host decides who gets hit. Our own player's
+        // hit goes to the host like a hit on a citizen (it is the same citizen there; the host's stands for itself).
+        if (session.Role == NetSession.SessionRole.Client)
+        {
+            if (fromWho != null && Player.Instance != null && fromWho.Pointer == Player.Instance.Pointer)
+                session.ForwardCitizenHit(__instance, amount, damagePosition, damageDirection);
+            return false;
+        }
         return !session.ForwardDamage(__instance, amount, fromWho, damagePosition, damageDirection);
     }
 }
