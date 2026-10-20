@@ -9,15 +9,18 @@ using UnityEngine;
 namespace SodCoop.Net;
 
 /// <summary>
-/// Sleeping, waiting and being knocked out all go through <c>Player.SetSpendingTimeMode(true)</c>, which speeds the clock
-/// up (<c>SessionData.SetTimeSpeed</c>). In a session time is shared, so:
+/// Sleeping and waiting go through <c>Player.SetSpendingTimeMode(true)</c>, which speeds the clock up
+/// (<c>SessionData.SetTimeSpeed</c>). In a session time is shared, so:
 /// <list type="bullet">
-/// <item>Time only skips while <b>every</b> player rests (sleeps, waits or is KO'd). The host decides: its own rest speeds the
-///   clock up only then; otherwise the host's clock stays at normal speed. Clients report their rest state (msg 52) and
-///   follow the host's clock and speed through TimeSync (their own SetTimeSpeed stays blocked there).</item>
+/// <item>Time only skips while <b>every</b> player sleeps or waits. The host decides: its own rest speeds the clock up only
+///   then; otherwise the host's clock stays at normal speed. Clients report their rest state (msg 52) and follow the
+///   host's clock and speed through TimeSync (their own SetTimeSpeed stays blocked there).</item>
 /// <item>A player resting alone sees "waiting for &lt;partner&gt;", and the partner a notice.</item>
-/// <item>KO: the game's recovery waits for game time the KO would normally skip. When time isn't skipping, a KO'd player
-///   recovers after <see cref="KoRealSeconds"/> real seconds instead of lying there for minutes.</item>
+/// <item>KO never skips time in a session. The game's KO (Player.Update): fall and fade to black, then teleport to a bed,
+///   then wait <c>KOTime</c> game hours with the clock forced to veryFast, then fade in and wake. Here the clock stays at
+///   normal speed (<see cref="NoKoSpeedUp"/>), the wait ends after <see cref="KoRealSeconds"/> real seconds
+///   (<see cref="KoFallback"/>), and the game's own end of the wait and wake-up undo the KO state (speed, fade,
+///   progress bar, disabled actions, pause, playerKOInProgress).</item>
 /// </list>
 /// Clients need TimeSync.BlockSpendTime gone (it refused a client's sleep/wait entirely); the speed-up inside is still
 /// blocked by TimeSync.BlockSpeed.
@@ -36,8 +39,8 @@ public static class RestSync
     static bool _settingSpeed;
     static float _koSince = -1f;
 
-    /// <summary>Local KO recovery, 0..1, or -1 when not KO'd (for the KO view).</summary>
-    public static float KoProgress => _koSince < 0f ? -1f : Mathf.Clamp01((Time.unscaledTime - _koSince) / KoRealSeconds);
+    /// <summary>Local KO recovery, 0..1, or -1 when not KO'd or already waking up (for the KO view).</summary>
+    public static float KoProgress => _koSince < 0f || KoWaking ? -1f : Mathf.Clamp01((Time.unscaledTime - _koSince) / KoRealSeconds);
     public static float KoSecondsLeft => _koSince < 0f ? 0f : Mathf.Max(0f, KoRealSeconds - (Time.unscaledTime - _koSince));
 
     public static int Sent { get; private set; }
@@ -45,7 +48,26 @@ public static class RestSync
     /// <summary>True on the host while everyone rests (time may skip).</summary>
     public static bool AllResting { get; private set; }
 
+    /// <summary>The local KO's wait is over: the game is fading back in (or the player is up).</summary>
+    public static bool KoWaking
+    {
+        get
+        {
+            var p = Player.Instance;
+            return p != null && p.playerKOInProgress && p.playerKOFadeOut && p.KOTimePassed >= p.KOTime;
+        }
+    }
+
     static NetSession Session => NetSession.Current;
+
+    /// <summary>In a session with someone else: a KO must not speed up the shared clock.</summary>
+    static bool LocalKoInSession()
+    {
+        var p = Player.Instance;
+        if (p == null || !p.playerKOInProgress || Session == null) return false;
+        foreach (var np in PlayerRegistry.All) if (!np.IsLocal) return true;
+        return false;
+    }
     static bool IsHost => Session?.Role == NetSession.SessionRole.Host;
 
     static RestKind LocalRest()
@@ -114,11 +136,12 @@ public static class RestSync
 
     static void HostTick(RestKind hostRest, IEnumerable<PlayerId> clients)
     {
-        bool any = false, all = hostRest != RestKind.None;
+        // A KO'd player doesn't count as resting: a KO never skips time in a session.
+        bool any = false, all = hostRest is not (RestKind.None or RestKind.KO);
         foreach (var c in clients)
         {
             any = true;
-            if (!_clientRest.TryGetValue(c, out var k) || k == RestKind.None) all = false;
+            if (!_clientRest.TryGetValue(c, out var k) || k is RestKind.None or RestKind.KO) all = false;
         }
         if (!any) { AllResting = hostRest != RestKind.None; return; } // alone: the game's own behaviour
         if (all != AllResting)
@@ -128,7 +151,7 @@ public static class RestSync
             if (all) Notify.Broadcast("Everyone is resting — time passes", InterfaceControls.Icon.agent);
         }
         var sd = SessionData.Instance;
-        if (sd == null || hostRest == RestKind.None) return; // an awake host runs its clock as usual
+        if (sd == null || hostRest is RestKind.None or RestKind.KO) return; // an awake (or KO'd) host runs its clock as usual
         var want = AllResting ? _restSpeed : SessionData.TimeSpeed.normal;
         if (sd.currentTimeSpeed != want) SetSpeed(sd, want);
     }
@@ -141,21 +164,67 @@ public static class RestSync
         TimeSync.Dirty = true;
     }
 
-    /// <summary>A KO waits for game time that only skips when everyone rests: recover after a short real time instead.</summary>
+    /// <summary>
+    /// The KO wait counts <c>Player.KOTimePassed</c> up to <c>KOTime</c> in game hours, which at normal speed takes many
+    /// minutes. After <see cref="KoRealSeconds"/> real seconds, and only once the player lies in the bed
+    /// (<c>playerKOFadeOut</c>: teleport and heal done), put the counter just below <c>KOTime</c>: the next frame's
+    /// increment crosses it inside the game's wait branch, which then ends the wait itself (time speed back to normal,
+    /// fade in, progress bar gone, interaction action completed) and later wakes the player (playerKOInProgress off,
+    /// pause and actions enabled again). Filling the counter up to <c>KOTime</c> would skip that branch and leave the
+    /// player knocked out for good (0.9.35). <c>TriggerPlayerRecovery</c> does nothing during a KO.
+    /// </summary>
     static void KoFallback(float now, RestKind local)
     {
         if (local != RestKind.KO) { _koSince = -1f; return; }
         if (_koSince < 0f) _koSince = now;
-        var sd = SessionData.Instance;
-        bool skipping = sd != null && sd.currentTimeSpeed > SessionData.TimeSpeed.normal && (!IsHost || AllResting);
-        if (skipping || now - _koSince < KoRealSeconds) return;
-        _koSince = -1f;
-        try
+        if (now - _koSince < KoRealSeconds || !LocalKoInSession()) return;
+        var p = Player.Instance;
+        if (!p.playerKOFadeOut || p.KOTimePassed >= p.KOTime) return;
+        float target = p.KOTime - 1e-4f;
+        if (p.KOTimePassed >= target) return;
+        Plugin.Event($"REST KO for {now - _koSince:F0} s: recovery counter {p.KOTimePassed:F3} -> {target:F3} of {p.KOTime:F3}, the game wakes us up");
+        p.KOTimePassed = target;
+    }
+
+    /// <summary>A KO in a session never speeds up the clock (the game sets veryFast for the KO wait).</summary>
+    [HarmonyPatch(typeof(SessionData), nameof(SessionData.SetTimeSpeed))]
+    static class NoKoSpeedUp
+    {
+        static bool Prefix(SessionData.TimeSpeed newTimeSpeed) =>
+            _settingSpeed || newTimeSpeed <= SessionData.TimeSpeed.normal || !LocalKoInSession();
+    }
+
+    /// <summary>
+    /// The game's KO wait starts with "if the speed isn't veryFast: set veryFast, show the fast-forward arrow, the KO
+    /// progress bar and the KO message". With the speed kept at normal that would run every frame (message and speed
+    /// request each frame). Once it ran (the progress bar's interaction action is active), Player.Update sees veryFast
+    /// for the rest of the wait; the real speed is put back right after.
+    /// </summary>
+    [HarmonyPatch(typeof(Player), "Update")]
+    static class KoWaitOnce
+    {
+        static void Prefix(Player __instance, out int __state)
         {
-            Player.Instance.TriggerPlayerRecovery();
-            Plugin.Event($"REST recovered from KO after {KoRealSeconds:F0} s (time doesn't skip while others are up)");
+            __state = -1;
+            var sd = SessionData.Instance;
+            if (sd == null || !__instance.playerKOInProgress || !__instance.playerKOFadeOut) return;
+            if (sd.currentTimeSpeed == SessionData.TimeSpeed.veryFast || !LocalKoInSession()) return;
+            var ic = InteractionController.Instance;
+            if (ic == null || !ic.activeInteractionAction) return;
+            __state = (int)sd.currentTimeSpeed;
+            sd.currentTimeSpeed = SessionData.TimeSpeed.veryFast;
         }
-        catch (Exception e) { Plugin.Event($"REST KO recovery failed: {e.Message}"); }
+
+        static void Postfix(int __state)
+        {
+            if (__state < 0) return;
+            var sd = SessionData.Instance;
+            // The end of the wait sets normal speed itself (blocked on clients, so the stand-in may still be there).
+            if (sd != null && sd.currentTimeSpeed == SessionData.TimeSpeed.veryFast) sd.currentTimeSpeed = (SessionData.TimeSpeed)__state;
+            // Time isn't fast-forwarding: no fast-forward arrow.
+            var arrow = InterfaceControls.Instance != null ? InterfaceControls.Instance.fastForwardArrow : null;
+            if (arrow != null && arrow.gameObject.activeSelf) arrow.gameObject.SetActive(false);
+        }
     }
 
     // ------------------------------------------------------------------ host: the game's own speed-up

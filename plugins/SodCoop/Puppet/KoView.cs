@@ -18,7 +18,8 @@ public static class KoView
 
     public static bool Active => _active;
 
-    static bool LocalKnockedOut => Player.Instance != null && Player.Instance.playerKOInProgress;
+    /// <summary>Knocked out and still waiting: once the game fades back in, the player sees their own view again.</summary>
+    static bool LocalKnockedOut => Player.Instance != null && Player.Instance.playerKOInProgress && !RestSync.KoWaking;
 
     static Human Partner()
     {
