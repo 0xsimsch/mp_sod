@@ -6,6 +6,8 @@ namespace SodCoop.Net;
 /// Design decision: only the host controls time. The host sends its clock every 2 s; a client
 /// snaps to it when it drifts more than <see cref="MaxDrift"/> game hours, and copies the time speed.
 /// On a client, local attempts to change time (speed buttons, sleeping/waiting, fast-forward) are blocked.
+/// The host's game difficulty comes along: a client plays at it while in the session (it scales the damage a player
+/// takes, among others) and gets its own back when it leaves. Only the field is set, so the client's setting isn't saved over.
 /// </summary>
 public static class TimeSync
 {
@@ -14,6 +16,8 @@ public static class TimeSync
     const float MaxDrift = 0.02f;
 
     static bool _applying;
+    /// <summary>Client: its own difficulty while it plays at the host's, -1 if untouched.</summary>
+    static int _ownDifficulty = -1;
     internal static bool Applying => _applying;
     public static int Corrections { get; private set; }
 
@@ -25,11 +29,30 @@ public static class TimeSync
     public static TimeSyncMsg Capture()
     {
         var sd = SessionData.Instance;
-        return new TimeSyncMsg { GameTime = sd.gameTime, TimeSpeed = (byte)sd.currentTimeSpeed, LeapYearCycle = sd.leapYearCycle, Paused = Patches.PauseSync.WorldPaused };
+        return new TimeSyncMsg { GameTime = sd.gameTime, TimeSpeed = (byte)sd.currentTimeSpeed, LeapYearCycle = sd.leapYearCycle, Paused = Patches.PauseSync.WorldPaused,
+            Difficulty = (byte)(Game.Instance != null ? Game.Instance.gameDifficulty : 0) };
     }
 
     /// <summary>Session over: hand pausing back to the game.</summary>
-    public static void Reset() => Patches.PauseSync.Reset();
+    public static void Reset()
+    {
+        Patches.PauseSync.Reset();
+        if (_ownDifficulty >= 0 && Game.Instance != null)
+        {
+            Game.Instance.gameDifficulty = _ownDifficulty;
+            Plugin.Event($"TIME difficulty back to our own {_ownDifficulty}");
+        }
+        _ownDifficulty = -1;
+    }
+
+    static void ApplyDifficulty(int hostDifficulty)
+    {
+        var g = Game.Instance;
+        if (g == null || g.gameDifficulty == hostDifficulty) return;
+        if (_ownDifficulty < 0) _ownDifficulty = g.gameDifficulty;
+        Plugin.Event($"TIME difficulty {g.gameDifficulty} -> host's {hostDifficulty}");
+        g.gameDifficulty = hostDifficulty;
+    }
 
     public static void Apply(TimeSyncMsg m)
     {
@@ -50,6 +73,7 @@ public static class TimeSync
 
             // The world pauses only while every player is in a menu; the host decides (Patches/PauseSync.cs).
             Patches.PauseSync.SetWorldPaused(m.Paused);
+            ApplyDifficulty(m.Difficulty);
         }
         finally { _applying = false; }
     }

@@ -111,7 +111,7 @@ def main():
         if client and game_time is not None and now >= next_time:
             next_time = now + 2
             # game hours advance 0.0125 h per real second at normal speed
-            sock.sendto(msg(TIMESYNC, struct.pack("<fBi?", game_time + 0.0025 * (now - (welcomed_at or 0)), 1, 0, False)), client)
+            sock.sendto(msg(TIMESYNC, struct.pack("<fBi?B", game_time + 0.0025 * (now - (welcomed_at or 0)), 1, 0, False, 1)), client)
 
         if client and client_pos and npcs and now >= next_npc:
             next_npc = now + 0.1

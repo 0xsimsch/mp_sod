@@ -244,6 +244,8 @@ public struct TimeSyncMsg
     public int LeapYearCycle;
     /// <summary>Design: a host pause pauses everyone.</summary>
     public bool Paused;
+    /// <summary>The host's Game.gameDifficulty: everyone plays at it (it scales the damage a player takes).</summary>
+    public byte Difficulty;
 }
 
 public struct PlayerKOMsg
@@ -391,7 +393,7 @@ public struct ForensicMsg
 public static class Protocol
 {
     /// <summary>Bump on any wire change. Hosts reject other versions in the handshake.</summary>
-    public const ushort Version = 43;
+    public const ushort Version = 44;
     const ushort Magic = 0x4D53; // "SM"
 
     public static byte[] Hello(HelloMsg m) => Write(MsgType.Hello, w =>
@@ -452,12 +454,12 @@ public static class Protocol
 
     public static byte[] TimeSync(TimeSyncMsg m) => Write(MsgType.TimeSync, w =>
     {
-        w.Write(m.GameTime); w.Write(m.TimeSpeed); w.Write(m.LeapYearCycle); w.Write(m.Paused);
+        w.Write(m.GameTime); w.Write(m.TimeSpeed); w.Write(m.LeapYearCycle); w.Write(m.Paused); w.Write(m.Difficulty);
     });
 
     public static TimeSyncMsg ReadTimeSync(byte[] d) => Read(d, r => new TimeSyncMsg
     {
-        GameTime = r.ReadSingle(), TimeSpeed = r.ReadByte(), LeapYearCycle = r.ReadInt32(), Paused = r.ReadBoolean(),
+        GameTime = r.ReadSingle(), TimeSpeed = r.ReadByte(), LeapYearCycle = r.ReadInt32(), Paused = r.ReadBoolean(), Difficulty = r.ReadByte(),
     });
 
     public static byte[] PlayerKO(PlayerKOMsg m) => Write(MsgType.PlayerKO, w => { w.Write(m.PlayerId); w.Write(m.KnockedOut); });
