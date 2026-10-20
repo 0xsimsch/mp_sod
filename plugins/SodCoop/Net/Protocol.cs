@@ -123,6 +123,8 @@ public struct WelcomeMsg
     public byte MaxPlayers;
     /// <summary>City share code the host is playing; the client must load the same city.</summary>
     public string CityShareCode;
+    /// <summary>The host's player name (its Steam name unless configured), for the nametag over its body.</summary>
+    public string HostName;
 }
 
 public struct RejectMsg
@@ -389,7 +391,7 @@ public struct ForensicMsg
 public static class Protocol
 {
     /// <summary>Bump on any wire change. Hosts reject other versions in the handshake.</summary>
-    public const ushort Version = 42;
+    public const ushort Version = 43;
     const ushort Magic = 0x4D53; // "SM"
 
     public static byte[] Hello(HelloMsg m) => Write(MsgType.Hello, w =>
@@ -400,7 +402,7 @@ public static class Protocol
 
     public static byte[] Welcome(WelcomeMsg m) => Write(MsgType.Welcome, w =>
     {
-        w.Write(m.PlayerId); w.Write(m.MaxPlayers); Str(w, m.CityShareCode);
+        w.Write(m.PlayerId); w.Write(m.MaxPlayers); Str(w, m.CityShareCode); Str(w, m.HostName);
     });
 
     public static byte[] Reject(RejectMsg m) => Write(MsgType.Reject, w => Str(w, m.Reason));
@@ -668,7 +670,7 @@ public static class Protocol
 
     public static WelcomeMsg ReadWelcome(byte[] d) => Read(d, r => new WelcomeMsg
     {
-        PlayerId = r.ReadByte(), MaxPlayers = r.ReadByte(), CityShareCode = Str(r),
+        PlayerId = r.ReadByte(), MaxPlayers = r.ReadByte(), CityShareCode = Str(r), HostName = Str(r),
     });
 
     public static RejectMsg ReadReject(byte[] d) => Read(d, r => new RejectMsg { Reason = Str(r) });

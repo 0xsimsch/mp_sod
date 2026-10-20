@@ -33,8 +33,8 @@ static class Program
         var cd = Protocol.ReadDamage(Protocol.CitizenDamage(new DamageMsg { PlayerId = 1, Amount = 0.5f, AttackerHumanId = 79 }));
         Check(cd.PlayerId == 1 && cd.AttackerHumanId == 79 && Math.Abs(cd.Amount - 0.5f) < 1e-6, "CitizenDamage round trip");
 
-        var w = Protocol.ReadWelcome(Protocol.Welcome(new WelcomeMsg { PlayerId = 3, MaxPlayers = 4, CityShareCode = "City|seed" }));
-        Check(w.PlayerId == 3 && w.MaxPlayers == 4 && w.CityShareCode == "City|seed", "Welcome round trip");
+        var w = Protocol.ReadWelcome(Protocol.Welcome(new WelcomeMsg { PlayerId = 3, MaxPlayers = 4, CityShareCode = "City|seed", HostName = "Zoë" }));
+        Check(w.PlayerId == 3 && w.MaxPlayers == 4 && w.CityShareCode == "City|seed" && w.HostName == "Zoë", "Welcome round trip");
 
         var poseIn = new PoseMsg { PlayerId = 1, Seq = 65535, Time = 12.5f, Position = new Vec3(1, 2, 3), Yaw = 270f, Pitch = -10f, Flags = PoseFlags.Running | PoseFlags.Moving };
         var poseBytes = Protocol.Pose(poseIn);

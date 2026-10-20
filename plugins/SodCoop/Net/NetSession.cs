@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.40";
+    public const string ModVersion = "0.9.41";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -39,6 +39,7 @@ public sealed class NetSession : IDisposable
     PeerId _host;
     bool _hasHost;
     bool _welcomed;
+    string _hostName = "Host";
     bool _rejected;
     /// <summary>Client: bodies we created for other players (host and other clients; all relayed by the host).</summary>
     readonly HashSet<PlayerId> _clientBodies = new();
@@ -780,6 +781,7 @@ public sealed class NetSession : IDisposable
             PlayerId = id.Value,
             MaxPlayers = (byte)PlayerRegistry.MaxPlayers,
             CityShareCode = CityId(),
+            HostName = LocalName(),
         }), true);
         MurderSync.SendAll(json => SendTo(from, Protocol.MurderRecord(json), true));
         CaseRecordSync.SendAll((json, active) => SendTo(from, Protocol.CaseRecord(json, active), true));
@@ -795,6 +797,8 @@ public sealed class NetSession : IDisposable
         Patches.PauseSync.ReportPending = true; // tell the host whether we are in a menu right now
         Notify.Show("Connected to the host", InterfaceControls.Icon.agent);
         PlayerRegistry.MaxPlayers = m.MaxPlayers;
+        _hostName = string.IsNullOrEmpty(m.HostName) ? "Host" : m.HostName;
+        if (PlayerRegistry.TryGet(PlayerId.Host, out var hostPlayer) && !hostPlayer.IsLocal) hostPlayer.DisplayName = _hostName;
         // Joined from the main menu: no local player registered yet (EnsureLocalPlayer waits for a world).
         if (PlayerRegistry.Local == null) PlayerRegistry.Add(new PlayerId(m.PlayerId), LocalName(), isLocal: true);
         else PlayerRegistry.ReassignLocal(new PlayerId(m.PlayerId));
@@ -837,7 +841,7 @@ public sealed class NetSession : IDisposable
             if (_spawnRetryAt.TryGetValue(id, out var retry) && now < retry) return;
             // Borrow the citizen the host assigned (the same one everywhere); none yet → wait for the body map.
             if (!_assignedBody.TryGetValue(id, out var assigned)) return;
-            if (SpawnBody(id, id.IsHost ? "Host" : $"Player {id.Value}", assigned) == null) { _spawnRetryAt[id] = now + 5f; return; }
+            if (SpawnBody(id, id.IsHost ? _hostName : $"Player {id.Value}", assigned) == null) { _spawnRetryAt[id] = now + 5f; return; }
             _spawnRetryAt.Remove(id);
             _clientBodies.Add(id);
             PlayerRegistry.TryGet(id, out player);
