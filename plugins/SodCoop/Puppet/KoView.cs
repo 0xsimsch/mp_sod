@@ -8,7 +8,7 @@ namespace SodCoop.Puppet;
 /// <summary>
 /// While the local player is knocked out in a session, watch the partner in third person: a copy of the game's camera
 /// (keeps HDRP setup, post-processing and culling settings) without its scripts, drawn over the main camera and placed
-/// behind and above the partner's body. Recovery progress is drawn by <see cref="SessionOverlay"/>.
+/// behind and above the partner's body.
 /// </summary>
 public static class KoView
 {

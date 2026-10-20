@@ -25,33 +25,6 @@ public class SessionOverlay : MonoBehaviour
         _flashUntil = Time.unscaledTime + 6f;
     }
     GUIStyle _style;
-    GUIStyle _koStyle;
-    Texture2D _white;
-
-    /// <summary>While knocked out in a session: "Knocked out: recovering… 12 s" and a bar, bottom centre.</summary>
-    void DrawKoProgress()
-    {
-        float p = Net.RestSync.KoProgress;
-        if (p < 0f || Net.NetSession.Current == null) return;
-        if (_koStyle == null)
-        {
-            _koStyle = new GUIStyle(GUI.skin.label) { fontSize = Math.Max(18, Screen.height / 45), alignment = TextAnchor.MiddleCenter };
-            _koStyle.normal.textColor = Color.white;
-            _white = new Texture2D(1, 1);
-            _white.SetPixel(0, 0, Color.white);
-            _white.Apply();
-        }
-        float w = Screen.width * 0.3f, h = Screen.height * 0.012f, x = (Screen.width - w) / 2f, y = Screen.height * 0.82f;
-        string partner = Puppet.KoView.Active ? " (watching your partner)" : "";
-        GUI.Label(new Rect(x - w, y - h * 5f, w * 3f, h * 4f), $"Knocked out: recovering… {Net.RestSync.KoSecondsLeft:F0} s{partner}", _koStyle);
-        var old = GUI.color;
-        GUI.color = new Color(0f, 0f, 0f, 0.6f);
-        GUI.DrawTexture(new Rect(x, y, w, h), _white);
-        GUI.color = new Color(0.85f, 0.15f, 0.15f, 0.95f);
-        GUI.DrawTexture(new Rect(x, y, w * p, h), _white);
-        GUI.color = old;
-    }
-
     GUIStyle _tagStyle;
     bool _tagFailed;
     const float NametagRange = 60f;
@@ -101,7 +74,6 @@ public class SessionOverlay : MonoBehaviour
 
     void OnGUI()
     {
-        DrawKoProgress();
         try { DrawNametags(); }
         catch (Exception e) { if (!_tagFailed) { _tagFailed = true; Plugin.Event($"nametags failed: {e.Message}"); } }
         if (CoopBehaviour.TraceFrames > 0) Plugin.Event($"TRACE f{Time.frameCount} overlay OnGUI ({_text.Length} chars)");
