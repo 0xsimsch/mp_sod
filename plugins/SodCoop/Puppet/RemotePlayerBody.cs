@@ -6,7 +6,8 @@ namespace SodCoop.Puppet;
 /// <summary>
 /// Host-side body of a remote player. Prototype: possesses an existing citizen (already
 /// fully built: model, outfit, animator, colliders), turns its AI off and flags it
-/// <c>isPlayer</c> so the game's perception code treats it as a player.
+/// <c>isPlayer</c> so the game's perception code treats it as a player. That flag also makes the
+/// game stamp its outfit parts onto the culled Player layer — see Patches/OutfitLayerPatch.
 /// </summary>
 public sealed class RemotePlayerBody
 {
@@ -79,6 +80,7 @@ public sealed class RemotePlayerBody
         body.ArmWith(null);
         owner.RemoteBody = body;
         PlayerRegistry.BindRemoteBody(owner, donor);
+        body.RepairModelLayers(); // parts a previous possession left on the culled Player layer
         Plugin.Event($"{owner} possessed citizen {donor.humanID} \"{donor.citizenName}\"");
         Plugin.Event($"{owner} body outfit at possess: {body.OutfitStatus()}");
         return body;
@@ -123,6 +125,7 @@ public sealed class RemotePlayerBody
             _marker.Ensure(Human, Owner.Id.Value);
             DropCitizenProps();
             if (!_combatShown) ArmWith(null);
+            RepairModelLayers();
             RepairOutfit();
             var outfit = OutfitStatus();
             if (outfit != _lastOutfitStatus) { _lastOutfitStatus = outfit; Plugin.Event($"{Owner} body outfit: {outfit}, {dist:F0} m, visible={Human.visible}"); }
@@ -633,15 +636,36 @@ public sealed class RemotePlayerBody
         catch (System.Exception e) { return $"? ({e.Message})"; }
     }
 
-    // The missing-clothes bug (only head, hands and feet drawn) came back with all 40 renderers on and the outfit
-    // loaded: right when the body jumped from the borrowed citizen's spot (60 m) to the player (6 m) and the game swapped
-    // the outfit (casual -> outdoorsCasual). The clothes evidently didn't follow. Reload the outfit after such a jump, or
-    // when renderers sit more than 3 m from the body; at most every 5 s.
+    // The missing-clothes bug (only the face drawn) was the game restamping an isPlayer citizen's re-added
+    // outfit parts onto the culled Player layer — fixed by Patches/OutfitLayerPatch; RemotePlayerBody.RepairModelLayers
+    // repairs parts that got there before the fix. What this reload addresses is only what the 0.9.38 log showed
+    // on top of that: renderers left more than 3 m from the body (stale meshes after a jump), and it was first
+    // seen when the game swapped the outfit (casual -> outdoorsCasual) right after the body jumped from the
+    // borrowed citizen's spot (60 m) to the player (6 m). At most every 5 s, and at most 3 tries per jump.
     int _outfitFar;
     Vector3 _lastBodyPos;
     bool _hasLastBodyPos;
     float _reloadOutfitAt = -1f, _nextOutfitReload;
     int _outfitReloads;
+
+    /// <summary>
+    /// Safety net for the culled-layer bug (see Patches/OutfitLayerPatch): the game moves every outfit part it
+    /// (re)adds for an isPlayer citizen to the Player layer, which the scene camera does not render. The patch
+    /// fixes the additions as they happen; this also repairs parts a previous possession left behind, or ones
+    /// added by a path that sets the layer without AddMeshRenderer.
+    /// </summary>
+    void RepairModelLayers()
+    {
+        int moved = 0;
+        foreach (var r in Human.GetComponentsInChildren<Renderer>(true))
+        {
+            var go = r.gameObject;
+            if (go.layer != ModelLayers.Player) continue;
+            go.layer = ModelLayers.CitizenModels;
+            moved++;
+        }
+        if (moved > 0) Plugin.Event($"{Owner} body: moved {moved} renderer(s) back from the culled Player layer");
+    }
 
     void RepairOutfit()
     {

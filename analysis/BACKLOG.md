@@ -1,11 +1,28 @@
 # Backlog
 
-## Host's body shows only head, hands and feet on the client (0.9.4)
+## Host's body shows only head, hands and feet on the client (0.9.4 — FIXED 0.9.52)
 
 **Seen:** first minutes of a fresh session. The client looks at the host's stand-in (overlay: `body of P0: citizen 3,
 2 m, visible=True`). Only the head, the two hands and the two shoes render, floating where they should be. The torso,
 arms, legs and clothes are missing. Position and pose look right, and `visible=True`, so this isn't the
 `SetVisible`/room bug that `RemotePlayerBody.KeepShown` already guards against.
+
+**Root cause (verified by disassembly, 0.9.52):** `CitizenOutfitController.AddMeshRenderer` (RVA 0x686FF0) sets every
+outfit part it adds to layer `CitizenModels` (24), then **overwrites it with layer `Player` (20) when the wearer is
+`isPlayer` and not a scene poser** — a layer the scene camera culls (it's for the player's own dedicated camera). Our
+puppets possess a citizen with `isPlayer = true`, so every outfit rebuild after possession (outfit sync, game
+day/night swap, the 0.9.38 `RepairOutfit` — which is why that "fix" made things worse) restamped the clothes onto the
+culled layer. The face (eyes/mouth/eyebrows) is built in `Citizen.Awake` before possession and is never re-added —
+that is why only it stayed visible, and why a fresh puppet from the pool looked fine until the first rebuild. The
+0.9.51 `NOT DRAWN` log closes the case: body renderers `layer 20 culled=True`, face renderers on 24/0 not culled.
+A full scan of every `GameObject::set_layer` call site in GameAssembly shows `AddMeshRenderer` is the only code that
+moves citizen parts to layer 20 (`Human::AddMesh` uses 30 = Outline, which the camera renders).
+
+**Fix (0.9.52):** `Patches/OutfitLayerPatch.cs` postfixes `AddMeshRenderer` and moves parts of a registered remote
+body back from `Player` to `CitizenModels`; `RemotePlayerBody.RepairModelLayers()` does the same sweep in `Possess`
+(citizens released with broken parts) and every 0.5 s in `KeepShown` as a safety net.
+
+**Historical notes kept below — earlier wrong turns:**
 
 **Likely cause (not verified):** a citizen's clothes are separate meshes that `CitizenOutfitController` loads and
 unloads on demand (`LoadCurrentOutfit` / `RemoveCurrentOutfit`, `loadedOutfit`, `meshesLOD`/`UpdateLODs`,
