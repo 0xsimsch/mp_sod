@@ -126,8 +126,54 @@ public sealed class RemotePlayerBody
             RepairOutfit();
             var outfit = OutfitStatus();
             if (outfit != _lastOutfitStatus) { _lastOutfitStatus = outfit; Plugin.Event($"{Owner} body outfit: {outfit}, {dist:F0} m, visible={Human.visible}"); }
+            CheckDrawn(cam);
         }
         catch (System.Exception e) { Plugin.Event($"body visibility guard for {Owner} failed: {e.Message}"); }
+    }
+
+    // Seen (two-machine test, 0.9.50): the nametag 3 m away in plain view, no body under it, while visible=True and all
+    // 40 renderers on. The game hides a citizen only through Renderer.enabled and modelParent.SetActive (both fine
+    // then), so log what else could keep it from being drawn, once per time it goes missing.
+    int _notDrawnChecks;
+    bool _notDrawnLogged;
+
+    void CheckDrawn(Camera cam)
+    {
+        if (cam == null || Hidden || KnockedOut) { _notDrawnChecks = 0; return; }
+        var neck = Human.neckTransform != null ? Human.neckTransform.position : Human.transform.position + Vector3.up * 1.7f;
+        var vp = cam.WorldToViewportPoint(neck);
+        bool inView = vp.z > 0.3f && vp.z < 30f && vp.x > 0.05f && vp.x < 0.95f && vp.y > 0.05f && vp.y < 0.95f;
+        int drawn = 0;
+        var renderers = Human.GetComponentsInChildren<Renderer>(true);
+        foreach (var r in renderers) if (r.isVisible) drawn++;
+        if (!inView || drawn > 0)
+        {
+            if (_notDrawnLogged && drawn > 0) Plugin.Event($"{Owner} body drawn again ({drawn} renderer(s))");
+            if (drawn > 0) _notDrawnLogged = false;
+            _notDrawnChecks = 0;
+            return;
+        }
+        if (++_notDrawnChecks < 3 || _notDrawnLogged) return; // in view for ~1 s and nothing drawn
+        _notDrawnLogged = true;
+        var sb = new System.Text.StringBuilder();
+        var root = Human.transform;
+        sb.Append($"{Owner} body NOT DRAWN though in view: neck {vp.z:F1} m at screen ({vp.x:F2},{vp.y:F2}); ")
+          .Append($"root {root.position} scale {root.lossyScale} active={Human.gameObject.activeInHierarchy}; neck {neck}; camera {cam.transform.position} ")
+          .Append($"mask 0x{cam.cullingMask:X} far {cam.farClipPlane:F0}; visible={Human.visible}; ")
+          .Append($"modelParent {(Human.modelParent == null ? "none" : $"active={Human.modelParent.activeInHierarchy} at {Human.modelParent.transform.position} scale {Human.modelParent.transform.lossyScale}")}; ")
+          .Append($"room {(Human.currentRoom != null ? Human.currentRoom.roomID.ToString() : "-")}, player room {(Player.Instance?.currentRoom != null ? Player.Instance.currentRoom.roomID.ToString() : "-")}");
+        int i = 0;
+        foreach (var r in renderers)
+        {
+            if (i++ >= 12) { sb.Append($"\n    … {renderers.Length - 12} more"); break; }
+            var b = r.bounds;
+            var mats = r.sharedMaterials;
+            int nullMats = 0; foreach (var m in mats) if (m == null) nullMats++;
+            sb.Append($"\n    {r.gameObject.name}: on={r.enabled}/{r.gameObject.activeInHierarchy} forceOff={r.forceRenderingOff} shadows={r.shadowCastingMode} ")
+              .Append($"layer {r.gameObject.layer} culled={(cam.cullingMask & (1 << r.gameObject.layer)) == 0} rlayer 0x{r.renderingLayerMask:X} ")
+              .Append($"bounds {b.center} size {b.size} mats {mats.Length} null {nullMats}{(mats.Length > 0 && mats[0] != null ? $" '{mats[0].name}'/{mats[0].shader?.name}" : "")}");
+        }
+        Plugin.Event(sb.ToString());
     }
 
     // --- where the player looks and what's in their hands (from the pose; applied after the Animator)
