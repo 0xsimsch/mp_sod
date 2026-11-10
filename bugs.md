@@ -22,7 +22,14 @@
   - 0.9.56: the sender ignored the seat while crouched (isCrouched stays set when sitting from a crouch) and the
     receiver kept the 70 % crouch scale once seated. Now the seat transition wins and seated bodies are full size. Untested.
 - the client spawned with a person that was constantly in a hunched position, also while moving it didnt have a walking animation
+  - 0.9.57: the borrowed citizen's own state wasn't cleared: UpdateMovementSpeed feeds the animator drunk ← Human.drunk
+    and sobering up runs in the disabled AI, so a drunk donor stays hunched/stumbling. Now drunk is zeroed (restored on
+    release), and paused animation / cuffs / ragdoll / combat are reset; "donor animation state" logs what it had. Untested.
 
 unclear:
 
 - the pins can get into a state that doesnt allow for unpinning
+
+future:
+
+- remove new evidence found messages for other players
