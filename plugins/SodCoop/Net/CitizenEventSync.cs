@@ -29,7 +29,7 @@ public static class CitizenEventSync
     public const byte StatesMsg = 38;
     const ushort Magic = 0x4D53; // same header as Protocol: ushort magic, byte type
 
-    public enum Kind : byte { Attack = 1, Throw = 2, Block = 3, AbortAttack = 4, Speak = 5, SpeakDds = 6, Bark = 7 }
+    public enum Kind : byte { Attack = 1, Throw = 2, Block = 3, AbortAttack = 4, Speak = 5, SpeakDds = 6, Bark = 7, Recoil = 8 }
 
     /// <summary>Set by NetSession: send to one player's peer (host side).</summary>
     public static Action<PlayerId, byte[], bool> SendToPlayer;
@@ -108,6 +108,17 @@ public static class CitizenEventSync
         }
     }
 
+    // Hit reaction. On a client the hit itself is forwarded to the host (Patches/DamageForward) and the local
+    // RecieveDamage — the only caller of TakeDamageRecoil — is skipped, so nobody there saw a citizen flinch.
+    [HarmonyPatch(typeof(CitizenAnimationController), nameof(CitizenAnimationController.TakeDamageRecoil))]
+    static class Recoil
+    {
+        static void Postfix(CitizenAnimationController __instance, Vector3 hitPosition)
+        {
+            if (!_applying) SendEvent(__instance.cit, Kind.Recoil, w => { w.Write(hitPosition.x); w.Write(hitPosition.y); w.Write(hitPosition.z); });
+        }
+    }
+
     // Speech: only the outermost hooked call is sent (a bark or a DDS line may speak through the other overloads).
     [ThreadStatic] static int _speechDepth;
 
@@ -170,9 +181,11 @@ public static class CitizenEventSync
         public string Weapon;      // MurderWeaponPreset name or ""
         public string Action;      // AIActionPreset name or ""
         public bool Right, Left;   // the action's props are spawned in that hand on the host
+        public byte Drunk;         // 0..255 of Human.drunk clamped to 0..1 (the stagger in the walk animation)
 
         public bool SameAs(in State o) => Reaction == o.Reaction && TargetPlayer == o.TargetPlayer && Math.Abs(Alertness - o.Alertness) < 26 &&
-                                          Outfit == o.Outfit && Combat == o.Combat && Weapon == o.Weapon && Action == o.Action && Right == o.Right && Left == o.Left;
+                                          Outfit == o.Outfit && Combat == o.Combat && Weapon == o.Weapon && Action == o.Action && Right == o.Right && Left == o.Left &&
+                                          Math.Abs(Drunk - o.Drunk) < 26 && (Drunk == 0) == (o.Drunk == 0);
     }
 
     const float StateInterval = 0.2f;
@@ -198,6 +211,7 @@ public static class CitizenEventSync
             if (preset != null && (s.Right || s.Left)) s.Action = preset.name;
         }
         if (c.outfitController != null) s.Outfit = (byte)c.outfitController.currentOutfit;
+        s.Drunk = (byte)Mathf.RoundToInt(Mathf.Clamp01(c.drunk) * 255f);
         return s;
     }
 
@@ -291,6 +305,12 @@ public static class CitizenEventSync
             case Kind.AbortAttack:
                 anim?.AbortAttackTrigger();
                 break;
+            case Kind.Recoil:
+            {
+                var at = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+                anim?.TakeDamageRecoil(at);
+                break;
+            }
             case Kind.Speak:
             {
                 string dict = Str(r), entry = Str(r);
@@ -337,6 +357,23 @@ public static class CitizenEventSync
 
     static readonly List<int> _done = new();
 
+    /// <summary>
+    /// Client: the host stopped driving this citizen and its own AI has it again (props dropped, reaction changed).
+    /// What we had applied goes back to "pending": if the host takes it over again in the same state it re-sends
+    /// nothing new, and comparing with the stale applied copy skipped the hands and the reaction indicator.
+    /// </summary>
+    public static void Released(int humanId)
+    {
+        if (_applied.Remove(humanId, out var s) && !_pending.ContainsKey(humanId)) _pending[humanId] = s;
+    }
+
+    /// <summary>Client: session over or a new world: nothing applied or pending is valid any more.</summary>
+    public static void ClearClient()
+    {
+        _pending.Clear();
+        _applied.Clear();
+    }
+
     static void ApplyPending()
     {
         _done.Clear();
@@ -362,6 +399,9 @@ public static class CitizenEventSync
         // Outfit (coat outdoors, night clothes in bed, work uniform…)
         if (c.outfitController != null && c.outfitController.currentOutfit != (ClothesPreset.OutfitCategory)s.Outfit)
             c.outfitController.SetCurrentOutfit((ClothesPreset.OutfitCategory)s.Outfit, false, false, true);
+
+        // Drunk: UpdateMovementSpeed feeds the animator from Human.drunk; sobering up runs in the (disabled) AI.
+        c.drunk = s.Drunk / 255f;
 
         // Reaction toward a player: the game's own indicator over the citizen's head ("!" / "?" / spotted).
         if (ai != null && (!had || old.Reaction != s.Reaction || old.TargetPlayer != s.TargetPlayer))
@@ -410,6 +450,9 @@ public static class CitizenEventSync
         anim?.SetInCombat(on);
         if (!on) { ClearHands(c); return; }
         var w = Preset(_weapons, weaponName);
+        // The preset picks the stance and the swing animation; the client's copy of the citizen may hold another
+        // weapon than the host's. NpcPuppets.Release gives the citizen its own back (UpdateCurrentWeapon).
+        if (w != null && c.ai != null && (c.ai.currentWeaponPreset == null || c.ai.currentWeaponPreset.Pointer != w.Pointer)) c.ai.currentWeaponPreset = w;
         if (w != null && w.itemRightOverride != null) Spawn(c, true, w.itemRightOverride, w.itemRightLocalPos, w.itemRightLocalEuler);
         if (w != null && w.itemLeftOverride != null) Spawn(c, false, w.itemLeftOverride, w.itemLeftLocalPos, w.itemLeftLocalEuler);
     }
@@ -465,7 +508,7 @@ public static class CitizenEventSync
     {
         w.Write(id); w.Write(s.Reaction); w.Write(s.TargetPlayer); w.Write(s.Alertness); w.Write(s.Outfit);
         w.Write((byte)((s.Combat ? 1 : 0) | (s.Right ? 2 : 0) | (s.Left ? 4 : 0)));
-        Str(w, s.Weapon); Str(w, s.Action);
+        Str(w, s.Weapon); Str(w, s.Action); w.Write(s.Drunk);
     }
 
     static (int, State) ReadState(BinaryReader r)
@@ -474,7 +517,7 @@ public static class CitizenEventSync
         var s = new State { Reaction = r.ReadByte(), TargetPlayer = r.ReadSByte(), Alertness = r.ReadByte(), Outfit = r.ReadByte() };
         byte f = r.ReadByte();
         s.Combat = (f & 1) != 0; s.Right = (f & 2) != 0; s.Left = (f & 4) != 0;
-        s.Weapon = Str(r); s.Action = Str(r);
+        s.Weapon = Str(r); s.Action = Str(r); s.Drunk = r.ReadByte();
         return (id, s);
     }
 

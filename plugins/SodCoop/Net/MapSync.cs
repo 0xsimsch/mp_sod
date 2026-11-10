@@ -51,6 +51,8 @@ public static class MapSync
             Sent++;
             Plugin.Event($"MAP took the blueprints of building {id} \"{_building.name}\": floor plan sent (level {level})");
         }
+
+        static void Finalizer() => _inTake = false; // also when TakeBlueprints throws (no postfix then)
     }
 
     [HarmonyPatch(typeof(NewRoom), nameof(NewRoom.SetExplorationLevel))]
@@ -87,8 +89,14 @@ public static class MapSync
         static void Prefix(Player __instance, out bool __state) { __state = ReportKey(__instance); _keyDepth++; }
         static void Postfix(NewAddress ad, bool __state)
         {
-            _keyDepth--;
             if (__state && ad != null) SendKey(KindKeyAddress, ad.id, $"address {ad.id} \"{ad.name}\"");
+        }
+
+        // Runs after the postfix, and also when the game method throws (the postfix doesn't then, and the depth
+        // stayed above zero: no key was ever shared again).
+        static void Finalizer()
+        {
+            if (_keyDepth > 0) _keyDepth--;
         }
     }
 

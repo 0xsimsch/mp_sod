@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.60";
+    public const string ModVersion = "0.9.61";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -94,7 +94,10 @@ public sealed class NetSession : IDisposable
                 if (c.isInBed) Puppet.BedDiag.Citizen(c);
                 var posture = (c.isInBed ? PoseFlags.InBed : 0) | (c.isInLowBed ? PoseFlags.LowBed : 0)
                               | (anim != null && anim.flipToRightAnimation ? PoseFlags.FlipRight : 0) | (c.isAsleep ? PoseFlags.Asleep : 0);
-                int state = idle | (arms << 8) | (ko ? 1 << 16 : 0) | ((int)posture << 17);
+                // The movement flags are part of the state: a citizen that stops within 5 cm of its last sent pose
+                // must still send "not moving" now, or it walks on the spot until the keep-alive.
+                int moveBits = (c.isCrouched ? 1 : 0) | (c.isRunning ? 2 : 0) | (c.isMoving ? 4 : 0);
+                int state = idle | (arms << 8) | (ko ? 1 << 16 : 0) | ((int)posture << 17) | (moveBits << 25);
                 // Delta filter: unchanged citizens only every NpcKeepAlive (the client releases after 3 s of silence).
                 var key = (kv.Key, c.humanID);
                 if (_npcLastSent.TryGetValue(key, out var last) && now - last.time < NpcKeepAlive && last.state == state &&
@@ -231,6 +234,11 @@ public sealed class NetSession : IDisposable
         {
             foreach (var peer in _playerOf.Keys) SendTo(peer, Protocol.Bye(), true);
             foreach (var peer in new List<PeerId>(_playerOf.Keys)) Drop(peer, "session closed");
+            // Hand pausing back to the game (a client does this in ResetClientWorld): leaving from the Esc menu
+            // while a client still played left play = true under an open pause menu.
+            TimeSync.Reset();
+            DragSync.Reset();
+            StatusSync.Reset();
         }
         else
         {
@@ -336,6 +344,7 @@ public sealed class NetSession : IDisposable
             CaseRecordSync.Flush(now, (json, active, fresh) => Broadcast(Protocol.CaseRecord(json, active, fresh), true));
             JobSync.Flush(now, (type, json) => Broadcast(Protocol.JobRecord(type, json), true));
             ObjectiveSync.Tick(now);
+            if (Role == SessionRole.Host) TalkSync.HostTick(now);
             CaseSync.FlushNotices();
             BloodSync.Tick(now);
             RestSync.Tick(now, _playerOf.Values);
@@ -750,9 +759,9 @@ public sealed class NetSession : IDisposable
             case MsgType.JobRecord:
                 if (Role == SessionRole.Host)
                 {
-                    // Job info a client acquired: apply, then pass on (last writer wins).
+                    // Job info a client acquired: JobSync takes it into the host's job and sends the host's job to
+                    // everyone. The client's raw record (its whole, possibly older job) is not passed on.
                     if (!_playerOf.ContainsKey(from)) break;
-                    foreach (var peer in _playerOf.Keys) if (peer != from) SendTo(peer, data, true);
                 }
                 var (jobType, jobJson) = Protocol.ReadJobRecord(data);
                 JobSync.Apply(jobType, jobJson);
@@ -761,14 +770,17 @@ public sealed class NetSession : IDisposable
                 JobSync.OnAcceptRequest(Protocol.ReadJobAccept(data), jobTaker.ToString());
                 break;
             case MsgType.CaseRecord:
+                byte caseSender = CaseRecordSync.NoSender;
                 if (Role == SessionRole.Host)
                 {
-                    // A client's board edit: apply, then pass on (last writer wins).
-                    if (!_playerOf.ContainsKey(from)) break;
-                    foreach (var peer in _playerOf.Keys) if (peer != from) SendTo(peer, data, true);
+                    // A client's board edit: merged here; the host's merged case then goes to every client
+                    // (CaseRecordSync marks it for sending). The client's raw record is not passed on: it carried
+                    // that client's whole case copy and its own "active" flag to the other clients.
+                    if (!_playerOf.TryGetValue(from, out var caseFrom)) break;
+                    caseSender = caseFrom.Value;
                 }
                 var (caseJson, caseActive, caseFresh) = Protocol.ReadCaseRecord(data);
-                CaseRecordSync.Apply(caseJson, caseActive && Role == SessionRole.Client, caseFresh); // only the host picks the active case
+                CaseRecordSync.Apply(caseJson, caseActive && Role == SessionRole.Client, caseFresh, caseSender); // only the host picks the active case
                 break;
             case MsgType.SnapshotChunk when Role == SessionRole.Client: SnapshotSync.OnChunk(Protocol.ReadSnapshotChunk(data)); break;
             case MsgType.TalkRequest when Role == SessionRole.Host:
@@ -841,6 +853,7 @@ public sealed class NetSession : IDisposable
     {
         if (_welcomed) return;
         _welcomed = true;
+        SnapshotSync.OnWelcomed();
         Patches.PauseSync.ReportPending = true; // tell the host whether we are in a menu right now
         Notify.Show("Connected to the host", InterfaceControls.Icon.agent);
         PlayerRegistry.MaxPlayers = m.MaxPlayers;
@@ -968,7 +981,7 @@ public sealed class NetSession : IDisposable
         var data = Protocol.DoorState(m);
         if (Role == SessionRole.Client)
         {
-            if (!_welcomed) return false;
+            if (!ClientWorldJoined) return false;
             SendTo(_host, data, true);
             return true;
         }
@@ -1012,7 +1025,7 @@ public sealed class NetSession : IDisposable
 
     public void SendCaseEvent(CaseEventMsg m)
     {
-        if (Role == SessionRole.Client && !_welcomed) return;
+        if (!ClientWorldJoined) return; // a client still in its own world: its evidence isn't the host's
         Broadcast(Protocol.CaseEvent(m), true);
     }
 
@@ -1029,7 +1042,7 @@ public sealed class NetSession : IDisposable
 
     public void SendSpawn(SpawnMsg m)
     {
-        if (Role == SessionRole.Client && !_welcomed) return;
+        if (!ClientWorldJoined) return;
         Broadcast(Protocol.Spawn(m), true);
     }
 
@@ -1046,6 +1059,12 @@ public sealed class NetSession : IDisposable
                 if (ItemSync.HostSwitchState(m, out var state)) Broadcast(Protocol.Item(state), true);
                 return;
             }
+            // Two players took the same item within one round trip: the first one the host knows of keeps it.
+            if (m.Kind == ItemEventKind.IntoInventory && ItemSync.HostRejectsPickup(m, out var heldBy))
+            {
+                SendTo(from, Protocol.Item(heldBy), true);
+                return;
+            }
             foreach (var peer in _playerOf.Keys) if (peer != from) SendTo(peer, data, true);
         }
         ItemSync.Apply(m);
@@ -1059,17 +1078,24 @@ public sealed class NetSession : IDisposable
                 yield return (kv.Key, p.Body.transform.position);
     }
 
+    /// <summary>
+    /// Client: welcomed, and the world running here is the host's (the join load is done, or none was needed).
+    /// Before that a client that joined from inside its own world would report that world's items, doors and
+    /// switches, and the host applied them to its own objects with the same ids. Always true on the host.
+    /// </summary>
+    public bool ClientWorldJoined => Role != SessionRole.Client || (_welcomed && SnapshotSync.ClientWorldIsHosts);
+
     public void SendItem(ItemMsg m)
     {
-        if (Role == SessionRole.Client && !_welcomed) return;
+        if (!ClientWorldJoined) return;
         Broadcast(Protocol.Item(m), true);
     }
 
     public void SendDeath(DeathMsg m) => Broadcast(Protocol.Death(m), true);
 
-    public void SendForensic(ForensicMsg m) { if (Role == SessionRole.Host || _welcomed) Broadcast(Protocol.Forensic(m), true); }
+    public void SendForensic(ForensicMsg m) { if (ClientWorldJoined) Broadcast(Protocol.Forensic(m), true); }
 
-    public void SendTalk(byte[] packet) { if (_hasHost) SendTo(_host, packet, true); }
+    public void SendTalk(byte[] packet) { if (_hasHost && ClientWorldJoined) SendTo(_host, packet, true); }
 
     public void SendMurderRecord(string json) => Broadcast(Protocol.MurderRecord(json), true);
 
@@ -1092,13 +1118,19 @@ public sealed class NetSession : IDisposable
     /// <summary>WorldSync: client → host; host → every client.</summary>
     public void SendWorld(byte[] data)
     {
-        if (Role == SessionRole.Client) { if (_welcomed && _hasHost) SendTo(_host, data, true); return; }
+        if (Role == SessionRole.Client)
+        {
+            // Our rest state is about our player, not the world: it goes out even before the joined world runs.
+            bool worldEvent = Protocol.PeekType(data) != MsgType.RestState;
+            if (_welcomed && _hasHost && (!worldEvent || ClientWorldJoined)) SendTo(_host, data, true);
+            return;
+        }
         foreach (var peer in _playerOf.Keys) SendTo(peer, data, true);
     }
 
     public void SendVictimDiscovered()
     {
-        if (Role == SessionRole.Client && _welcomed && _hasHost) SendTo(_host, Protocol.VictimDiscovered(), true);
+        if (Role == SessionRole.Client && _hasHost && ClientWorldJoined) SendTo(_host, Protocol.VictimDiscovered(), true);
     }
 
     /// <summary>Client: the host's SteamID (Profiles keys a player's profile by host and city).</summary>
@@ -1106,7 +1138,7 @@ public sealed class NetSession : IDisposable
 
     public void SendJobAccept(int jobId)
     {
-        if (Role == SessionRole.Client && _welcomed && _hasHost) SendTo(_host, Protocol.JobAccept(jobId), true);
+        if (Role == SessionRole.Client && _hasHost && ClientWorldJoined) SendTo(_host, Protocol.JobAccept(jobId), true);
     }
 
     /// <summary>The local player was knocked out or recovered: tell the others.</summary>
@@ -1124,6 +1156,7 @@ public sealed class NetSession : IDisposable
     public bool ForwardCitizenHit(Citizen target, float amount, Vector3 position, Vector3 direction)
     {
         if (Role != SessionRole.Client || !_welcomed || !_hasHost || PlayerRegistry.Local == null) return false;
+        if (!ClientWorldJoined) return false; // still in our own world: that citizen isn't the host's
         SendTo(_host, Protocol.CitizenDamage(new DamageMsg
         {
             PlayerId = PlayerRegistry.Local.Id.Value,
@@ -1179,7 +1212,10 @@ public sealed class NetSession : IDisposable
     {
         var key = (attacker, target);
         float t = Time.unscaledTime;
-        if (_lastForwardedHit.TryGetValue(key, out var lastHit) && t - lastHit < HitDedupWindow) return true;
+        // No attacker (sentry bullets, explosions): all of those share one key, so only the same-instant repeats
+        // of one hit are swallowed, not the next bullet.
+        float window = attacker < 0 ? 0.05f : HitDedupWindow;
+        if (_lastForwardedHit.TryGetValue(key, out var lastHit) && t - lastHit < window) return true;
         _lastForwardedHit[key] = t;
         return false;
     }
@@ -1251,11 +1287,15 @@ public sealed class NetSession : IDisposable
         ElevatorSync.Reset();
         BloodSync.Reset();
         PhoneSync.Reset();
+        TalkSync.Reset(); // granted conversations belong to the host we lost
         Puppet.Doubles.UnhideAll();
         _assignedBody.Clear();
         foreach (var id in new List<PlayerId>(_clientBodies)) DropRemoteBody(id, why);
         Puppet.NpcPuppets.ReleaseAll();
         TimeSync.Reset();
+        DragSync.Reset();
+        StatusSync.Reset();
+        SnapshotSync.ForgetLoaded(); // a new welcome from this host may bring a new snapshot: load it
     }
 
     /// <summary>Host: who stands for whom: the host's own stand-in (hidden here) and each client's body.</summary>
@@ -1334,6 +1374,11 @@ public sealed class NetSession : IDisposable
             PlayerRegistry.Remove(id);
         }
         foreach (var other in _playerOf.Keys) SendTo(other, Protocol.PlayerLeft(id.Value), true);
+        if (_playerOf.Count == 0)
+        {
+            RestSync.HostAlone();
+            DragSync.Reset(); // nobody left to end a drag: let held bodies go (DragSync.Tick stops without clients)
+        }
         Plugin.Event($"NET {id} dropped: {why}");
     }
 

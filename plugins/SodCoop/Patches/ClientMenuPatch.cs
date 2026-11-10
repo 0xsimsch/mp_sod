@@ -46,6 +46,23 @@ static class ClientMenuPatch
         }
     }
 
+    /// <summary>
+    /// The quick-save key on a client would write the host's world (borrowed bodies, the host's cases) into the
+    /// client's own "Quick Save", over its single-player one. StartQuickSaveAsync is an async void method, so skipping
+    /// it leaves no task for anyone to await.
+    /// </summary>
+    [HarmonyPatch(typeof(InputController), nameof(InputController.StartQuickSaveAsync))]
+    static class NoQuickSave
+    {
+        static bool Prefix()
+        {
+            if (!IsClient) return true;
+            Plugin.Event("MENU blocked: quick save on a client (the world is the host's)");
+            try { SessionOverlay.Flash("Quick save is off while you are in someone else's game"); } catch { /* notice only */ }
+            return false;
+        }
+    }
+
     // Not CaptureSaveStateAsync: it returns a Task, and skipping it would hand callers a null task to await.
     [HarmonyPatch(typeof(MainMenuController), nameof(MainMenuController.LoadGame))]
     static class NoLoad

@@ -48,6 +48,7 @@ public static class StatusSync
     /// <summary>Per frame from NetSession.Update (both roles, after welcome on clients).</summary>
     public static void Tick(float now)
     {
+        _alarmOwner = null; // only ever set inside one SetAlarm call; a throw in there must not leave it behind
         if (S == null || !World.Ready) return;
         if (IsClient) SendTrespassVerdict(now);
         else if (now >= _nextPursuers) { _nextPursuers = now + 1f; SendPursuers(); }
@@ -197,11 +198,54 @@ public static class StatusSync
         }
     }
 
+    // Host: the game's SetAlarm(true, target) makes "the player" wanted in the building when target.isPlayer
+    // (NewBuilding::SetAlarm 0x818f87 → StatusController.SetWantedInBuilding, same in NewAddress::SetAlarm). A
+    // client's body is isPlayer, so an alarm the client set off made the HOST wanted, and the broadcast below made
+    // every client wanted. While such an alarm is being raised, the wanted status goes to that client only.
+    static NetPlayer _alarmOwner;
+
+    [HarmonyPatch(typeof(NewBuilding), nameof(NewBuilding.SetAlarm))]
+    static class BuildingAlarmTarget
+    {
+        static void Prefix(Human target, out NetPlayer __state)
+        {
+            __state = _alarmOwner;
+            var owner = IsHost ? PlayerRegistry.RemoteOwnerOf(target) : null;
+            if (owner != null) _alarmOwner = owner;
+        }
+        static void Postfix(NetPlayer __state) => _alarmOwner = __state;
+    }
+
+    [HarmonyPatch(typeof(NewAddress), nameof(NewAddress.SetAlarm))]
+    static class AddressAlarmTarget
+    {
+        static void Prefix(Human target, out NetPlayer __state)
+        {
+            __state = _alarmOwner;
+            var owner = IsHost ? PlayerRegistry.RemoteOwnerOf(target) : null;
+            if (owner != null) _alarmOwner = owner;
+        }
+        static void Postfix(NetPlayer __state) => _alarmOwner = __state;
+    }
+
     [HarmonyPatch(typeof(StatusController), nameof(StatusController.SetWantedInBuilding))]
     static class Wanted
     {
-        static void Postfix(NewBuilding b, float time)
+        static bool Prefix(NewBuilding b, float time, out bool __state)
         {
+            __state = false;
+            var owner = _alarmOwner;
+            if (owner == null || _applying || !IsHost || b == null || !World.Ready || !S.TryPeerOf(owner.Id, out var peer)) return true;
+            int id = b.buildingID;
+            S.SendExtra(ExtraWire.Write(ExtraWire.Status, KindWanted, w => { w.Write(id); w.Write(time); }), peer);
+            Plugin.Event($"STATUS wanted in building {id} is {owner.Id}'s (its alarm): sent there, not ours");
+            __state = true;
+            return false; // not the host's status
+        }
+
+        static void Postfix(NewBuilding b, float time, bool __state)
+        {
+            if (__state) return; // went to the client that set the alarm off
             if (_applying || S == null || b == null || !World.Ready) return;
             int id = b.buildingID;
             S.SendExtra(ExtraWire.Write(ExtraWire.Status, KindWanted, w => { w.Write(id); w.Write(time); }));
@@ -236,4 +280,37 @@ public static class StatusSync
     }
 
     public static void Forget(PlayerId id) => _verdicts.Remove(id);
+
+    // The citizens of a replaced world are gone: nothing to un-mark.
+    static StatusSync() => World.Reloaded += () => _markedPursuers.Clear();
+
+    /// <summary>
+    /// Session over (or the host is gone): citizens we marked as chasing our player on the host's word get the mark
+    /// taken off again; nobody would clear it any more and they'd keep "pursuing" on local AI.
+    /// </summary>
+    public static void Reset()
+    {
+        _alarmOwner = null;
+        _verdicts.Clear();
+        _sentEscalation = -1; // the next session's host gets our verdict right away
+        try
+        {
+            var me = Player.Instance;
+            var dict = World.Ready ? CityData.Instance?.citizenDictionary : null;
+            if (me != null && dict != null && _markedPursuers.Count > 0)
+            {
+                int cleared = 0;
+                foreach (var id in _markedPursuers)
+                    if (dict.TryGetValue(id, out var h) && h != null && h.ai != null && h.ai.persuitTarget != null && h.ai.persuitTarget.Pointer == me.Pointer)
+                    {
+                        h.ai.persuit = false;
+                        h.ai.persuitTarget = null;
+                        cleared++;
+                    }
+                if (cleared > 0) Plugin.Event($"STATUS session over: {cleared} citizen(s) no longer marked as chasing us");
+            }
+        }
+        catch (Exception e) { Plugin.Event($"STATUS clearing pursuit marks failed: {e.Message}"); }
+        _markedPursuers.Clear();
+    }
 }

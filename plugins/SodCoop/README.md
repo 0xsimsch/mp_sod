@@ -77,6 +77,33 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.61: sync audit fixes (protocol v47, untested in game)
+
+From a read-through of the mod against the game's disassembly. Builds; nothing here was seen in a session yet.
+
+**Animation**
+- Walk speed of everything driven over the network was one frame's movement divided by a whole sample interval (1/3–1/6 of the real speed, changing with the frame rate). `NetworkPoseSource` now interpolates the pose time too and `BodyDriver` measures per frame.
+- The game re-enables a driven citizen's AI component by itself (`NewAIController.SetUpdateEnabled(true)` from `SetArmsBoolState`, `SetUmbrella` via `OnNodeChange`, `SetDesiredSpeed`, `HearIllegal`); its `FrequentUpdate` then ran on top of the host's poses. `Patches/AiTickPatch.KeepAiOff` refuses that for driven citizens, player bodies and hidden doubles; `NpcPuppets.Update` re-checks.
+- A citizen that stops within 5 cm of its last sent pose sends "not moving" at once (was: walked on the spot until the 1 s keep-alive).
+- A drawn weapon keeps its preset (the 0.5 s guard re-armed the body with fists); after a KO the body's stance, seat and arms are re-applied.
+- Citizens: hands/reaction are re-applied when the host takes a citizen over again; attacks use the host's weapon preset; hit recoil and `drunk` are sent (new event kind 8, one more byte per citizen state).
+
+**World**
+- A client that joins from inside its own world sends nothing from it until the host's world runs (5 s after the welcome when no snapshot comes).
+- A re-welcomed client loads the new snapshot (or says `WorldLoaded` for an ignored copy) instead of leaving the host holding its events for 5 minutes.
+- An alarm raised for a client makes only that client wanted, not the host and everyone else.
+- A host door change is re-sent to clients that were out of range when they come back.
+- Reloads that pass through "no city" or keep the `CityData` object reset the caches (`World.NotifyReloaded`); blood spatters are pruned by what still exists.
+- A dragged body is let go when its dragger goes silent or leaves; leaving as host gives pause and sleep speed back; simultaneous pick-ups are settled by the host; pursuit marks are cleared on session end.
+
+**Cases**
+- Host: open evidence windows re-check their pin after a client's board edit (needle stuck / wrong state). Client: stale window pins are re-pointed; the needle redraw repairs a missing parent window; a pin dragged from the needle is sent on release.
+- "No active case → New Case" from a needle uses the client's id range too (it took the id of the host's next murder case), and the range starts above ids already used.
+- Board merge is per pin, not per board; closing a case reaches the other side (new sub-kind 3 under CaseResolve); the host no longer relays a client's raw case/job record; "resolved" waits for the case record; a client's job record can't roll back the host's phase; talk locks time out.
+- Clients can't quicksave (F5 wrote the host's world over their own Quick Save).
+
+Not done: host ignoring `Locked` in a client's door message (needs a wire flag), events in the ~0.25 s between snapshot capture and the hold queue, citizens' carry state / combat-arms override, and the open items in `analysis/SYNC_GAPS.md` (G1 hand-in on the host first).
+
 ## 0.9.37
 
 - The splash screen still showed the old art: "Press Any Button" is its own scene (`level0`, 12 objects: its own `Background Image` + `Logo` + `PressAnyButtonText`) with a separate copy of the `menuBG` sprite - `MainMenuController.backgroundImage` only owns the main-menu panel's copy (in `level1`). `MenuBackground` now sweeps every scene on load: any `Image` whose sprite or `RawImage` whose texture is still named `menuBG` gets the bundled one (plus an immediate sweep of the active scene at plugin load, and the `EnableMainMenu` catch-up).

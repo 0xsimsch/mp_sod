@@ -96,6 +96,10 @@ public static class DoorSync
 
         var msg = new DoorStateMsg { DoorKey = key, Ajar = door.ajar, Locked = door.isLocked, ByPlayer = by != null ? by.Id.Value : (byte)255 };
         if (s.SendDoor(msg, door.transform.position, InterestRadius)) Sent++;
+        // Host: a client between InterestRadius and LeaveRadius didn't get this change but still has the door in
+        // its "already sent" set, so coming back never resynced it. Forget the door for everyone: the approach
+        // check sends its state (again) to whoever is, or comes, within range.
+        if (s.Role == NetSession.SessionRole.Host) foreach (var set in _inRange.Values) set.Remove(key);
     }
 
     /// <summary>Apply a received door state (both roles).</summary>

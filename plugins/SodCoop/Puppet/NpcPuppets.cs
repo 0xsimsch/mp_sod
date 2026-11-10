@@ -9,7 +9,6 @@ namespace SodCoop.Puppet;
 /// Client side of NPC sync (host-authoritative citizens). Citizens the host streams are taken off
 /// their local AI and driven from the host's poses; a citizen nobody has sent for
 /// <see cref="ReleaseAfter"/> seconds gets its own AI back (it left the client's area).
-/// Not synced yet: idle/arms/bed animation states, conversations, combat.
 /// </summary>
 public static class NpcPuppets
 {
@@ -37,6 +36,12 @@ public static class NpcPuppets
 
     /// <summary>True for a citizen currently driven by the host (its own AI must not tick).</summary>
     public static bool IsDriven(Actor a) => a != null && _drivenPtrs.Contains(a.Pointer);
+
+    static readonly HashSet<System.IntPtr> _koPtrs = new();
+
+    /// <summary>Driven and not knocked out: its AI component must stay off (see Patches/AiTickPatch, KeepAiOff).
+    /// While knocked out the game's own KO update may run.</summary>
+    public static bool IsDrivenAwake(Actor a) => a != null && _drivenPtrs.Contains(a.Pointer) && !_koPtrs.Contains(a.Pointer);
     public static int Received { get; private set; }
 
     public static void OnPoses(CitizenPosesMsg m, float now)
@@ -89,6 +94,7 @@ public static class NpcPuppets
         if (ko != e.KnockedOut && e.Citizen.ai != null)
         {
             e.KnockedOut = ko;
+            if (ko) _koPtrs.Add(e.Citizen.Pointer); else _koPtrs.Remove(e.Citizen.Pointer);
             var t = e.Citizen.transform;
             e.Citizen.ai.enabled = true; // SetKO drives the ragdoll through the controller
             e.Citizen.ai.SetKO(ko, t.position, t.forward, true, 3600f, false, 1f);
@@ -134,7 +140,11 @@ public static class NpcPuppets
             var e = kv.Value;
             if (e.Citizen == null || PlayerRegistry.IsRemoteBody(e.Citizen)) { (stale ??= new()).Add(kv.Key); continue; }
             if (now - e.LastSeen > ReleaseAfter) { (stale ??= new()).Add(kv.Key); continue; }
-            if (!e.KnockedOut && e.Source.TryGetPose(now, out var pose)) e.Driver.Apply(pose);
+            if (e.KnockedOut) continue;
+            // Safety net for Patches/AiTickPatch.KeepAiOff: an enabled AI component runs the citizen's own
+            // FrequentUpdate (path following, facing, neck, attacks) on top of the host's poses.
+            if (e.Citizen.ai != null && e.Citizen.ai.enabled) e.Citizen.ai.enabled = false;
+            if (e.Source.TryGetPose(now, out var pose)) e.Driver.Apply(pose);
         }
         if (stale != null) foreach (var id in stale) Release(id);
     }
@@ -148,12 +158,15 @@ public static class NpcPuppets
             e.Citizen.ai.SetKO(false, e.Citizen.transform.position, e.Citizen.transform.forward, true, 0f, false, 1f);
             e.Citizen.animationController?.SetRagdoll(false, false);
         }
-        if (e.Citizen != null) _drivenPtrs.Remove(e.Citizen.Pointer);
+        if (e.Citizen != null) { _drivenPtrs.Remove(e.Citizen.Pointer); _koPtrs.Remove(e.Citizen.Pointer); }
+        CitizenEventSync.Released(id);
         // A citizen that became a player's body keeps its AI off (RemotePlayerBody owns it now).
         if (e.Citizen != null && e.Citizen.ai != null && !PlayerRegistry.IsRemoteBody(e.Citizen) && !e.Citizen.isDead) e.Citizen.ai.enabled = e.AiWasEnabled;
         if (e.Citizen != null && e.Citizen.ai != null && e.Citizen.ai.enabled && !e.Citizen.isDead)
         {
             // Re-plan from where the host left the citizen, instead of resuming a stale local goal (seen: U-turns at the edge).
+            // Its own weapon again first (CitizenEventSync set the host's preset for the attack animations).
+            try { e.Citizen.ai.UpdateCurrentWeapon(); } catch (System.Exception ex) { Plugin.Event($"NPC weapon restore for {id} failed: {ex.Message}"); }
             try { e.Citizen.ai.AITick(true, true); }
             catch (System.Exception ex) { Plugin.Event($"NPC re-plan for {id} failed: {ex.Message}"); }
         }
@@ -162,12 +175,15 @@ public static class NpcPuppets
     /// <summary>Stop driving a citizen without touching its AI (e.g. it's about to die by a network event).</summary>
     public static void Forget(int humanId)
     {
-        if (_driven.Remove(humanId, out var e) && e.Citizen != null) _drivenPtrs.Remove(e.Citizen.Pointer);
+        if (_driven.Remove(humanId, out var e) && e.Citizen != null) { _drivenPtrs.Remove(e.Citizen.Pointer); _koPtrs.Remove(e.Citizen.Pointer); }
+        CitizenEventSync.Released(humanId);
     }
 
     public static void ReleaseAll()
     {
         foreach (var id in new List<int>(_driven.Keys)) Release(id);
+        _koPtrs.Clear();
+        CitizenEventSync.ClearClient();
         _hasSeq = false;
     }
 }

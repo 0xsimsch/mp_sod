@@ -27,6 +27,48 @@ public static class CaseRecordSync
     /// was pinning, and the client's unsent pins were lost).</summary>
     static readonly Dictionary<int, string> _lastSent = new(), _lastApplied = new();
 
+    /// <summary>"No sender known" for <see cref="Apply(string, bool, bool, byte)"/>.</summary>
+    public const byte NoSender = 255;
+
+    /// <summary>
+    /// Host: per case, the pins (element key) clients can know about and since when: the time we first sent the pin,
+    /// or 0 when a client sent it to us. A pin missing from a client's board is taken as removed by that client only if
+    /// the client can have seen it (<see cref="SeenGrace"/> after we sent it); a pin the host just made is kept.
+    /// </summary>
+    static readonly Dictionary<int, Dictionary<string, float>> _seenByClients = new();
+    const float SeenGrace = 3f; // our 1 s debounce + the client's 1 s debounce + latency
+    /// <summary>Client: per case, the pins of the last host record applied (a pin not in there is new from the host).</summary>
+    static readonly Dictionary<int, HashSet<string>> _hostKeys = new();
+
+    /// <summary>A pin's identity across machines: evidence id + its data keys.</summary>
+    static string KeyOf(Case.CaseElement e)
+    {
+        if (e == null) return "";
+        var sb = new System.Text.StringBuilder(e.id ?? "");
+        var dk = e.dk;
+        if (dk != null)
+            for (int i = 0; i < dk.Count; i++) sb.Append('|').Append((int)dk[i]);
+        return sb.ToString();
+    }
+
+    static HashSet<string> KeysOf(Case c)
+    {
+        var set = new HashSet<string>();
+        var list = c?.caseElements;
+        if (list != null)
+            for (int i = 0; i < list.Count; i++)
+                if (list[i] != null) set.Add(KeyOf(list[i]));
+        return set;
+    }
+
+    /// <summary>Host: the pins of a case just sent are known to clients from now on.</summary>
+    static void NoteSent(Case c, float now)
+    {
+        if (!_seenByClients.TryGetValue(c.id, out var seen)) _seenByClients[c.id] = seen = new Dictionary<string, float>();
+        foreach (var k in KeysOf(c))
+            if (!seen.ContainsKey(k)) seen[k] = now;
+    }
+
     public static int Sent { get; private set; }
     public static int Applied { get; private set; }
 
@@ -42,6 +84,7 @@ public static class CaseRecordSync
             if (c == null) continue;
             send(JsonUtility.ToJson(c), panel.activeCase != null && panel.activeCase.id == c.id, false); // pre-existing: no title on join
             Sent++;
+            NoteSent(c, Time.unscaledTime); // the joiner gets these pins (welcome batch and join save)
         }
     }
 
@@ -65,6 +108,7 @@ public static class CaseRecordSync
                 _lastSent[c.id] = json;
                 send(json, panel.activeCase != null && panel.activeCase.id == c.id, c.caseType == Case.CaseType.murder);
                 Sent++;
+                if (IsHost) NoteSent(c, now);
                 if (!IsHost) Plugin.Event($"CASE board edit for {c.id} \"{c.name}\" sent: {c.caseElements?.Count ?? 0} pins");
             }
         _dirty.Clear();
@@ -77,6 +121,29 @@ public static class CaseRecordSync
         _lastSent.Clear();
         _lastApplied.Clear();
         _deferred.Clear();
+        _seenByClients.Clear();
+        _hostKeys.Clear();
+    }
+
+    /// <summary>Host: is this case waiting to be sent (ObjectiveSync holds "resolved" back until it went out)?</summary>
+    public static bool IsPending(int caseId) => _dirty.Contains(caseId);
+
+    /// <summary>Host: send the waiting cases on the next frame instead of after the debounce.</summary>
+    public static void FlushSoon()
+    {
+        float now = Time.unscaledTime;
+        if (_flushAt > now) _flushAt = now;
+    }
+
+    /// <summary>
+    /// Client: a message about this case arrived (objective progress/completion, resolved) while its record is still
+    /// held back for a mouse drag: apply the record first, so the message finds the objective / the solved state.
+    /// </summary>
+    public static void ApplyDeferredNow(int caseId)
+    {
+        if (!_deferred.Remove(caseId, out var d)) return;
+        Plugin.Event($"CASE record {caseId}: applied early (a message about the case arrived while it was held for a drag)");
+        Apply(d.json, d.active, d.fresh, true, NoSender);
     }
 
     /// <summary>Host: re-send this case (status/resolution changed).</summary>
@@ -148,6 +215,15 @@ public static class CaseRecordSync
     [HarmonyPatch(typeof(PinnedItemController), nameof(PinnedItemController.OnEndDrag))]
     static class PinMoved { static void Postfix() => BoardEdited(); }
 
+    /// <summary>
+    /// A pin placed by dragging it off a window's needle: the placement coroutine moves it and the needle's release
+    /// ends it (PinFolderButtonController.ForcePointerUp); the pin's own OnEndDrag isn't part of that. Without this
+    /// the case was only marked at the press, so a placement longer than the debounce sent the mid-drag position and
+    /// the echo put the pin back there. An unchanged case isn't sent (Flush compares with the last send).
+    /// </summary>
+    [HarmonyPatch(typeof(PinFolderButtonController), nameof(PinFolderButtonController.ForcePointerUp))]
+    static class NeedleReleased { static void Postfix() => BoardEdited(); }
+
     /// <summary>String colour (stored in <c>Case.stringColours</c>).</summary>
     [HarmonyPatch(typeof(Case), nameof(Case.AddNewStringColour))]
     static class StringColour { static void Postfix(Case __instance) => BoardEdited(__instance); }
@@ -170,6 +246,60 @@ public static class CaseRecordSync
     {
         static void Prefix() => _playerCase = true;
         static void Postfix() => _playerCase = false;
+        static void Finalizer() => _playerCase = false; // also when the game method throws (no postfix then)
+    }
+
+    // ------------------------------------------------------------------ closing a case
+
+    [ThreadStatic] static bool _closing;
+
+    static void Forget(int caseId)
+    {
+        _dirty.Remove(caseId);
+        _lastSent.Remove(caseId);
+        _lastApplied.Remove(caseId);
+        _deferred.Remove(caseId);
+        _seenByClients.Remove(caseId);
+        _hostKeys.Remove(caseId);
+    }
+
+    /// <summary>
+    /// A case closed on this machine (CasePanelController.CloseCase takes it off activeCases, which is all Flush looks
+    /// at): tell the others, or they keep it forever and their next board edit brings it back here.
+    /// </summary>
+    [HarmonyPatch(typeof(CasePanelController), nameof(CasePanelController.CloseCase))]
+    static class Closed
+    {
+        static void Postfix(Case closeThisCase)
+        {
+            if (closeThisCase == null || _closing || _applying || NetSession.Current == null || !Core.World.Ready) return;
+            try
+            {
+                int id = closeThisCase.id;
+                Forget(id);
+                ObjectiveSync.SendClosed(id);
+                Plugin.Event($"CASE {id} \"{closeThisCase.name}\" closed here; told the others");
+            }
+            catch (Exception e) { Plugin.Event($"CASE close report failed: {e.Message}"); }
+        }
+    }
+
+    /// <summary>Another machine closed this case: close our copy the game's way, without reporting it back.</summary>
+    public static void ApplyClosed(int caseId)
+    {
+        var panel = CasePanelController.Instance;
+        var c = CaseById(caseId);
+        Forget(caseId);
+        if (panel == null || c == null) return;
+        _closing = true;
+        try
+        {
+            panel.CloseCase(c);
+            panel.UpdateCaseControls();
+            Plugin.Event($"CASE {caseId} \"{c.name}\" closed (closed on another machine)");
+        }
+        catch (Exception e) { Plugin.Event($"CASE closing {caseId} failed: {e.Message}"); }
+        finally { _closing = false; }
     }
 
     [HarmonyPatch(typeof(CasePanelController), nameof(CasePanelController.CreateNewCase))]
@@ -213,13 +343,16 @@ public static class CaseRecordSync
             var (json, active, fresh, since) = _deferred[id];
             if (dragging && now - since < MaxDefer) continue;
             _deferred.Remove(id);
-            Apply(json, active, fresh, fromQueue: true);
+            Apply(json, active, fresh, true, NoSender);
         }
     }
 
-    public static void Apply(string json, bool active, bool fresh) => Apply(json, active, fresh, false);
+    public static void Apply(string json, bool active, bool fresh) => Apply(json, active, fresh, false, NoSender);
 
-    static void Apply(string json, bool active, bool fresh, bool fromQueue)
+    /// <param name="fromPlayer">Host: the client that sent the record (<see cref="NoSender"/> if unknown).</param>
+    public static void Apply(string json, bool active, bool fresh, byte fromPlayer) => Apply(json, active, fresh, false, fromPlayer);
+
+    static void Apply(string json, bool active, bool fresh, bool fromQueue, byte fromPlayer)
     {
         var panel = CasePanelController.Instance;
         if (panel?.activeCases == null) return;
@@ -240,8 +373,21 @@ public static class CaseRecordSync
             var c = JsonUtility.FromJson(json, Il2CppType.Of<Case>())?.TryCast<Case>();
             if (c == null) { Plugin.Event("CASE record: JsonUtility returned nothing"); return; }
             if (IsHost && MergeBoardEdit(panel, c)) { Applied++; return; }
+            // Host: a case we don't have is only taken from the client that made it (ids in its own range, see CaseIds).
+            // Anything else is a case we closed (or never had): adding it back from the client's copy would set up its
+            // objectives here again. Tell the clients it is closed instead.
+            if (IsHost && fromPlayer != NoSender && c.id / CaseIds.Range != fromPlayer)
+            {
+                Plugin.Event($"CASE record {c.id} \"{c.name}\" from P{fromPlayer} refused: the host doesn't have that case (closed?); telling clients to close it");
+                ObjectiveSync.SendClosed(c.id);
+                return;
+            }
             if (_lastApplied.TryGetValue(c.id, out var lastJson) && lastJson == json) return; // unchanged: keep the board as it is
             _lastApplied[c.id] = json;
+            // Client: the case object is replaced, so "unchanged since our last send" no longer means the host has our
+            // state (hide a connection, the host shows it again, hide it again: the same JSON as our last send).
+            if (!IsHost) _lastSent.Remove(c.id);
+            var hostKeys = IsHost ? null : KeysOf(c); // before KeepLocalBoard swaps the board
             SetupObjectives(c, c.currentActiveObjectives);
             SetupObjectives(c, c.inactiveCurrentObjectives);
             SetupObjectives(c, c.endedObjectives);
@@ -257,12 +403,21 @@ public static class CaseRecordSync
                 RetireObjectives(old);
                 panel.activeCases.RemoveAt(i);
             }
+            if (hostKeys != null) _hostKeys[c.id] = hostKeys;
             panel.activeCases.Add(c);
             panel.UpdateCaseControls(); // case buttons on the board: new ones created, replaced ones refreshed
             if (active || wasActive)
             {
                 panel.SetActiveCase(c);
                 panel.UpdateStrings(); // string colours live in the case; redraw them from the new record
+                RefreshWindows(c);
+            }
+            if (IsHost)
+            {
+                // A case a client made: it goes to everyone from here (NetSession no longer relays the client's raw
+                // record). MarkDirty is off while applying, so set it directly.
+                _dirty.Add(c.id);
+                _flushAt = Time.unscaledTime;
             }
             Applied++;
             Plugin.Event($"CASE record {c.id} \"{c.name}\" applied: {c.caseElements?.Count ?? 0} pins, {c.currentActiveObjectives?.Count ?? 0} active objectives, active={active} ({json.Length} chars)");
@@ -305,6 +460,30 @@ public static class CaseRecordSync
     /// </summary>
     static void KeepLocalBoard(Case mine, Case incoming)
     {
+        // Pins the host added since its last record (not on our board, not in that record) come along: without this
+        // our board went out without them and the host took that as us removing them.
+        int added = 0;
+        try
+        {
+            var local = mine.caseElements;
+            var remote = incoming.caseElements;
+            if (local != null && remote != null && _hostKeys.TryGetValue(incoming.id, out var known) && known != null)
+            {
+                var have = KeysOf(mine);
+                for (int i = 0; i < remote.Count; i++)
+                {
+                    var e = remote[i];
+                    if (e == null) continue;
+                    string k = KeyOf(e);
+                    if (have.Contains(k) || known.Contains(k)) continue; // ours already, or one we removed ourselves
+                    local.Add(e);
+                    have.Add(k);
+                    added++;
+                }
+            }
+        }
+        catch (Exception e) { Plugin.Event($"CASE record {incoming.id}: taking the host's new pins failed: {e.Message}"); }
+        if (added > 0) Plugin.Event($"CASE record {incoming.id}: took {added} new pin(s) from the host onto our board");
         incoming.caseElements = mine.caseElements;
         incoming.stringColours = mine.stringColours;
         incoming.hiddenConnections = mine.hiddenConnections;
@@ -322,6 +501,40 @@ public static class CaseRecordSync
         for (int i = 0; i < panel.activeCases.Count; i++)
             if (panel.activeCases[i] != null && panel.activeCases[i].id == incoming.id) { mine = panel.activeCases[i]; break; }
         if (mine == null) return false; // a case the client made itself: add it whole
+        // Per pin instead of the whole board: the client's board wins for the pins it has (position, colour) and a pin
+        // it no longer has is removed, but a pin of ours the client can't have seen yet (made here in the last moments,
+        // or not sent at all) stays. Before, the client's record replaced the list and such a pin vanished everywhere.
+        int kept = 0;
+        try
+        {
+            float now = Time.unscaledTime;
+            if (!_seenByClients.TryGetValue(mine.id, out var seen))
+            {
+                // Nothing recorded for this case (it came with the join save): the client has had all of it.
+                _seenByClients[mine.id] = seen = new Dictionary<string, float>();
+                foreach (var k in KeysOf(mine)) seen[k] = 0f;
+            }
+            var theirs = KeysOf(incoming);
+            foreach (var k in theirs) seen[k] = 0f; // the client has these
+            var ours = mine.caseElements;
+            if (ours != null && incoming.caseElements != null)
+                for (int i = 0; i < ours.Count; i++)
+                {
+                    var e = ours[i];
+                    if (e == null) continue;
+                    string k = KeyOf(e);
+                    if (theirs.Contains(k)) continue;
+                    if (seen.TryGetValue(k, out var since) && now - since > SeenGrace) continue; // the client had it and removed it
+                    incoming.caseElements.Add(e);
+                    theirs.Add(k);
+                    kept++;
+                }
+            var gone = new List<string>();
+            foreach (var kv in seen) if (!theirs.Contains(kv.Key)) gone.Add(kv.Key);
+            foreach (var k in gone) seen.Remove(k);
+        }
+        catch (Exception e) { Plugin.Event($"CASE board edit for {mine.id}: per-pin merge failed ({e.Message}); taking the client's board as it is"); }
+        if (kept > 0) Plugin.Event($"CASE board edit for {mine.id}: kept {kept} pin(s) of ours the client hadn't seen yet");
         mine.caseElements = incoming.caseElements;
         mine.stringColours = incoming.stringColours;
         mine.hiddenConnections = incoming.hiddenConnections;
@@ -333,6 +546,7 @@ public static class CaseRecordSync
             // spawns the new ones and redraws the strings.
             panel.UpdatePinned();
             panel.UpdateStrings();
+            RefreshWindows(mine);
         }
         // Resync: the merged case goes straight back to everyone (the editor included), so every board shows the
         // host's state and the editor sees its edit confirmed. MarkDirty is off while applying, so set it directly.
@@ -340,6 +554,51 @@ public static class CaseRecordSync
         _flushAt = Time.unscaledTime;
         Plugin.Event($"CASE board edit for {mine.id} \"{mine.name}\" merged: {mine.caseElements?.Count ?? 0} pins; resyncing everyone");
         return true;
+    }
+
+    /// <summary>
+    /// After the active case's pins were replaced (new CaseElement objects, new pin controllers): bring the open
+    /// evidence windows back in line. A window keeps the element it was pinned as (currentPinnedCaseElement, and
+    /// forcedPinnedCaseElement when it was opened from a pin); the needle only unpins while that element's pin is
+    /// alive (PinFolderButtonController.ForcePointerUp), so a window left on a replaced element showed "pinned" and
+    /// could not be unpinned, or showed "unpinned" for evidence the other player had just pinned.
+    /// InfoWindow.PinnedUpdateCheck is the game's own recheck (what SetActiveCase runs for every window); it runs
+    /// here after the pins exist. A forced element is first moved to the new element with the same evidence and keys.
+    /// </summary>
+    static void RefreshWindows(Case active)
+    {
+        try
+        {
+            var windows = InterfaceController.Instance?.activeWindows;
+            if (windows == null || active == null) return;
+            var els = active.caseElements;
+            for (int i = 0; i < windows.Count; i++)
+            {
+                var w = windows[i];
+                if (w == null || w.WasCollected) continue;
+                try
+                {
+                    var forced = w.forcedPinnedCaseElement;
+                    if (forced != null && els != null && forced.caseID == active.id)
+                    {
+                        string k = KeyOf(forced);
+                        bool still = false;
+                        Case.CaseElement same = null;
+                        for (int j = 0; j < els.Count; j++)
+                        {
+                            var e = els[j];
+                            if (e == null) continue;
+                            if (e.Pointer == forced.Pointer) { still = true; break; }
+                            if (same == null && KeyOf(e) == k) same = e;
+                        }
+                        if (!still && same != null) w.forcedPinnedCaseElement = same;
+                    }
+                    w.PinnedUpdateCheck();
+                }
+                catch (Exception e) { Plugin.Event($"CASE window refresh failed: {e.Message}"); }
+            }
+        }
+        catch (Exception e) { Plugin.Event($"CASE window refresh failed: {e.Message}"); }
     }
 
     /// <summary>

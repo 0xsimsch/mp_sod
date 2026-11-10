@@ -99,6 +99,25 @@ public static class RestSync
 
     public static void Forget(PlayerId id) => _clientRest.Remove(id);
 
+    /// <summary>
+    /// Host: the last client left. If we went to rest while it was awake, the clock was put back to normal speed to
+    /// wait for it, and nothing sped it up again (Tick doesn't run without clients): the host slept in real time.
+    /// </summary>
+    public static void HostAlone()
+    {
+        try
+        {
+            var p = Player.Instance;
+            var sd = SessionData.Instance;
+            if (p == null || sd == null || !World.Ready || !p.spendingTimeMode || p.playerKOInProgress) return;
+            AllResting = true;
+            if (sd.currentTimeSpeed != SessionData.TimeSpeed.normal) return; // the game's own speed-up is in place
+            SetSpeed(sd, _restSpeed);
+            Plugin.Event($"REST alone again while resting: time passes ({_restSpeed})");
+        }
+        catch (Exception e) { Plugin.Event($"REST speed-up after the partner left failed: {e.Message}"); }
+    }
+
     public static void Reset()
     {
         _clientRest.Clear();

@@ -37,17 +37,31 @@ public sealed class BodyDriver
     {
         var anim = Human.animationController;
         if (anim == null) return;
-        if (_lastPoseTime >= 0f && pose.Time > _lastPoseTime)
+        float dt = pose.Time - _lastPoseTime;
+        if (_lastPoseTime < 0f || dt < 0f || dt > 1f)
         {
+            // First pose, or the sender's clock jumped: nothing to measure against.
+            _lastPos = pose.Position;
+            _lastPoseTime = pose.Time;
+        }
+        else if (dt >= 0.005f)
+        {
+            // Poses from the network are interpolated per frame (position and time), so this is the real speed.
             var d = pose.Position - _lastPos;
             d.y = 0f;
-            float measured = d.magnitude / (pose.Time - _lastPoseTime);
-            _speed = Mathf.Lerp(_speed, measured, 0.3f);
+            float measured = d.magnitude / dt;
+            _speed = Mathf.Lerp(_speed, measured, 1f - Mathf.Exp(-dt * 12f)); // same smoothing at any frame rate
+            _lastPos = pose.Position;
+            _lastPoseTime = pose.Time;
         }
-        else if (!pose.Moving) _speed = Mathf.Lerp(_speed, 0f, 0.3f);
+        else if (dt == 0f)
+        {
+            // Holding the newest pose (nothing newer arrived): keep the speed while the sender says "moving", so a
+            // late packet doesn't stop the walk cycle; otherwise come to rest.
+            if (!pose.Moving) _speed = Mathf.Lerp(_speed, 0f, Mathf.Clamp01(Time.deltaTime * 12f));
+        }
+        // 0 < dt < 5 ms: too short to measure (float time resolution); wait for the next frame.
         if (_speed < 0.05f) _speed = 0f;
-        _lastPos = pose.Position;
-        _lastPoseTime = pose.Time;
 
         float run = Human.movementRunSpeed > 0.1f ? Human.movementRunSpeed : 5f;
         Human.currentMovementSpeed = _speed;

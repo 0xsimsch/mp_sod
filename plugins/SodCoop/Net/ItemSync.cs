@@ -109,7 +109,11 @@ public static class ItemSync
                     var holder = m.HolderIsPlayer
                         ? (PlayerRegistry.TryGet(new PlayerId((byte)m.Holder), out var p) ? p.Body : null)
                         : (CityData.Instance.citizenDictionary.TryGetValue(m.Holder, out var hh) ? hh : null);
-                    if (holder != null) it.SetInInventory(holder);
+                    if (holder == null) break;
+                    // Another player has it now (both took it at once and the other one won): it leaves our own
+                    // inventory, or both could use and drop the same object.
+                    if (HeldByLocal(it) && holder.Pointer != Player.Instance.Pointer) DropFromOwnSlots(it, m.Holder);
+                    it.SetInInventory(holder);
                     break;
                 case ItemEventKind.OutOfInventory:
                     var node = Toolbox.Instance.FindClosestValidNodeToWorldPosition(pos, false, true, false, default, false, 0, false, 200);
@@ -121,6 +125,7 @@ public static class ItemSync
                 {
                     var ctrl = it.controller;
                     if (ctrl == null) { it.MoveInteractable(pos, euler, true); break; } // not spawned here: the resting place follows
+                    _remoteThrown.Add(m.Id);
                     var thrower = PlayerRegistry.TryGet(new PlayerId(m.ByPlayer), out var tp) ? tp.Body : null;
                     tp?.RemoteBody?.OnThrew(m.Id);
                     ctrl.SetPhysics(true, thrower);
@@ -145,6 +150,54 @@ public static class ItemSync
         }
         catch (Exception e) { Plugin.Event($"ITEM {m.Kind} #{m.Id} failed: {e.Message}"); }
         finally { _applying = false; }
+    }
+
+    /// <summary>Objects another player threw here (replayed throws): their owner's machine decides what they do.</summary>
+    static readonly HashSet<int> _remoteThrown = new();
+
+    public static bool ThrownByRemote(int id) => _remoteThrown.Contains(id);
+
+    /// <summary>Take an object out of our own first-person slots without reporting it (we are applying a network event).</summary>
+    static void DropFromOwnSlots(Interactable it, int newHolder)
+    {
+        try
+        {
+            var fpc = FirstPersonItemController.Instance;
+            if (fpc?.slots == null) return;
+            for (int i = 0; i < fpc.slots.Count; i++)
+            {
+                var slot = fpc.slots[i];
+                if (slot == null || slot.interactableID != it.id) continue;
+                var held = slot.GetInteractable();
+                if (held == null || held.id != it.id) continue;
+                fpc.EmptySlot(slot, false, false, false, false);
+                Plugin.Event($"ITEM #{it.id} {it.name} was taken by P{newHolder} at the same moment: removed from our inventory");
+            }
+        }
+        catch (Exception e) { Plugin.Event($"ITEM #{it.id}: emptying our slot failed: {e.Message}"); }
+    }
+
+    /// <summary>
+    /// Host: a client says it picked something up that another player already holds here (both took it within one
+    /// round trip). Refused; <paramref name="heldBy"/> tells that client who has it, which empties its slot.
+    /// </summary>
+    public static bool HostRejectsPickup(ItemMsg m, out ItemMsg heldBy)
+    {
+        heldBy = m;
+        try
+        {
+            if (!World.Ready || !m.HolderIsPlayer) return false;
+            var it = WorldSync.FindInteractable(m.Id);
+            if (it == null || it.inInventory == null) return false;
+            var owner = PlayerRegistry.OwnerOf(it.inInventory);
+            if (owner == null || owner.Id.Value == m.Holder) return false;
+            heldBy.ByPlayer = owner.Id.Value;
+            heldBy.Holder = owner.Id.Value;
+            heldBy.HolderIsPlayer = true;
+            Plugin.Event($"ITEM #{m.Id} {it.name}: P{m.ByPlayer} took it, but {owner.Id} already holds it; refused");
+            return true;
+        }
+        catch (Exception e) { Plugin.Event($"ITEM #{m.Id}: pickup check failed: {e.Message}"); return false; }
     }
 
     static bool SwitchValue(Interactable it, InteractablePreset.Switch which) => which switch
@@ -180,7 +233,7 @@ public static class ItemSync
     static bool IsLocal(Actor a) => a != null && Player.Instance != null && a.Pointer == Player.Instance.Pointer;
 
     [HarmonyPatch(typeof(InteractableController), nameof(InteractableController.MovablePickUpThis))]
-    static class Carry { static void Postfix(InteractableController __instance) { if (__instance.interactable != null) _touched.Add(__instance.interactable.id); } }
+    static class Carry { static void Postfix(InteractableController __instance) { if (__instance.interactable != null) { _touched.Add(__instance.interactable.id); _remoteThrown.Remove(__instance.interactable.id); } } }
 
     /// <summary>
     /// Our player let go of a carried object (thrown or dropped): send its start and velocity so it flies the same arc
@@ -314,7 +367,14 @@ public static class ItemSync
     static class Move { static void Postfix(Interactable __instance) => Report(__instance, ItemEventKind.Move); }
 
     [HarmonyPatch(typeof(Interactable), nameof(Interactable.SetInInventory))]
-    static class Into { static void Postfix(Interactable __instance, Human newActor) => Report(__instance, ItemEventKind.IntoInventory, newActor); }
+    static class Into
+    {
+        static void Postfix(Interactable __instance, Human newActor)
+        {
+            if (!_applying && __instance != null && IsLocal(newActor)) _remoteThrown.Remove(__instance.id); // ours now
+            Report(__instance, ItemEventKind.IntoInventory, newActor);
+        }
+    }
 
     static bool HeldByLocal(Interactable it) => it.inInventory != null && Player.Instance != null && it.inInventory.Pointer == Player.Instance.Pointer;
 

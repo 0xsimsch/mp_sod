@@ -109,6 +109,9 @@ public static class GadgetSync
         {
             if (!IsClient || _applying || !World.Ready || grenade == null || grenade.rem) return;
             int id = grenade.id;
+            // Another player's throw replayed here: its own machine (the host, or the host on that client's word)
+            // sets it off; ours going off first must not detonate the host's copy early.
+            if (ItemSync.ThrownByRemote(id)) return;
             Session?.SendWorld(Write(Kind.Explode, w => w.Write(id)));
             Sent++;
             Plugin.Event($"GADGET #{id} went off here; telling the host");

@@ -43,3 +43,28 @@ static class NoPersueTargetByRemoteBody
     static bool Prefix(NewAIController __instance, Actor newTarget) =>
         newTarget == null || !PlayerRegistry.IsRemoteBody(__instance.human);
 }
+
+/// <summary>
+/// The game switches a citizen's AI component on by itself whenever something needs per-frame work
+/// (<c>NewAIController.SetUpdateEnabled(true)</c>, from <c>CitizenAnimationController.SetArmsBoolState</c> /
+/// <c>SetUmbrella</c> — which we call ourselves, or reach through <c>Human.OnNodeChange</c> when a driven body
+/// changes node — <c>Human.SetDesiredSpeed</c>, <c>HearIllegal</c>, …). While it is on,
+/// <c>CitizenBehaviour.LateUpdate</c> runs that citizen's <c>FrequentUpdate</c>: path following, facing, neck and
+/// attack updates from its *local* AI state, every frame on top of the poses we apply (seen as flickering /
+/// twitching citizens on a client), and it only switches itself off again when the citizen is idle, which a
+/// driven one that "is moving" never is. Keep it off for every body we drive; a knocked-out one may run (the
+/// game's KO update), and so may our own direct <c>ai.enabled = true</c> around SetKO.
+/// </summary>
+[HarmonyPatch(typeof(NewAIController), nameof(NewAIController.SetUpdateEnabled))]
+static class KeepAiOff
+{
+    static bool Prefix(NewAIController __instance, bool val)
+    {
+        if (!val) return true;
+        var h = __instance.human;
+        if (h == null) return true;
+        if (Puppet.NpcPuppets.IsDrivenAwake(h) || Puppet.Doubles.IsHidden(h)) return false;
+        var owner = PlayerRegistry.RemoteOwnerOf(h);
+        return owner?.RemoteBody == null || owner.RemoteBody.KnockedOut;
+    }
+}

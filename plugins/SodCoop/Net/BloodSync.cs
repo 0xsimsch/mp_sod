@@ -81,6 +81,9 @@ public static class BloodSync
     {
         if (now < _nextPoll || Session == null || !World.Ready) return;
         _nextPoll = now + PollInterval;
+        // Client still in its own world (the host's snapshot hasn't loaded yet): nothing to learn or send there, and
+        // priming on it made every spatter of the host's save look local after the load: removed.
+        if (!Session.ClientWorldJoined) return;
         var list = GameplayController.Instance?.spatter;
         if (list == null) return;
 
@@ -91,6 +94,15 @@ public static class BloodSync
             for (int i = 0; i < list.Count; i++) if (list[i] != null) _known.Add(list[i].Pointer);
             _primedGeneration = World.Generation;
             return;
+        }
+
+        // Forget simulations that are gone: a later one can get a freed one's address and would count as known
+        // (never sent by the host, never removed on a client).
+        if (_known.Count > 0)
+        {
+            var live = new HashSet<IntPtr>();
+            for (int i = 0; i < list.Count; i++) if (list[i] != null) live.Add(list[i].Pointer);
+            _known.IntersectWith(live);
         }
 
         var me = Player.Instance;

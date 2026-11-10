@@ -97,16 +97,40 @@ public static class JobSync
         if (ctrl?.allJobsDictionary == null || !World.Ready) return;
         var type = TypeOf(typeName);
         if (type == null) { Plugin.Event($"JOB unknown job type {typeName}"); return; }
+        int resend = -1;
         _applying = true;
         try
         {
             var incoming = JsonUtility.FromJson(json, type)?.TryCast<SideJob>();
             if (incoming == null) { Plugin.Event("JOB record: JsonUtility returned nothing"); return; }
             int id = incoming.jobID;
+            // Client: info we acquired ourselves hasn't gone out yet (2 s debounce). The host's record doesn't have it
+            // and would wipe it here, and we would then send the wiped job. Skip this one: ours goes out next, the host
+            // takes our info into its job and sends the result back.
+            if (IsClient && _dirty.Contains(id) && ctrl.allJobsDictionary.ContainsKey(id))
+            {
+                Plugin.Event($"JOB {id}: host record skipped, our own job info isn't sent yet");
+                return;
+            }
             if (ctrl.allJobsDictionary.TryGetValue(id, out var job) && job != null)
             {
                 bool wasAccepted = job.accepted;
+                // Host: a client's record is its whole copy of the job, and a client never runs job logic, so its
+                // lifecycle fields are at best what we last sent it. Take the info it acquired, keep our own lifecycle
+                // (state, accepted, case, failed, post) and never go back a phase.
+                bool fromClient = IsHost;
+                var hState = job.state; bool hFailed = job.failed; int hCase = job.caseID, hPhase = job.phase, hPhaseChange = job.phaseChange, hPost = job.postID;
                 CopySavedState(incoming, job, typeName); // keep the instance: the controller's lists point at it
+                if (fromClient)
+                {
+                    job.state = hState; job.accepted = wasAccepted; job.failed = hFailed; job.caseID = hCase; job.postID = hPost;
+                    if (job.phase < hPhase)
+                    {
+                        Plugin.Event($"JOB {id}: client record had phase {job.phase}, the host is at {hPhase}; kept the host's");
+                        job.phase = hPhase; job.phaseChange = hPhaseChange;
+                    }
+                    resend = id; // everyone gets the host's job with the client's info in it
+                }
                 job.SetupNonSerializedData();
                 if (job.accepted && !wasAccepted) job.CreateAcqusitionFacts();
             }
@@ -128,6 +152,12 @@ public static class JobSync
         }
         catch (Exception e) { Plugin.Event($"JOB record failed: {e}"); }
         finally { _applying = false; }
+        if (resend >= 0)
+        {
+            // MarkDirty is off while applying; NetSession no longer passes the client's raw record on.
+            _dirty.Add(resend);
+            if (_flushAt > Time.unscaledTime) _flushAt = Time.unscaledTime;
+        }
         CaseSync.RetryPending(); // facts this job created may be what earlier case events were waiting for
     }
 

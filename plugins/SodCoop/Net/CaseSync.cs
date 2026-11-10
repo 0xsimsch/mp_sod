@@ -216,8 +216,15 @@ public static class CaseSync
 
     static void MergePostfix(Evidence ev, Evidence.DataKey keyOne, Evidence.DataKey keyTwo)
     {
-        // The EvidenceLocation override may call base: report only the outermost call.
-        if (--_mergeDepth == 0 && NetSession.Current != null) Report(CaseEventKind.MergeKeys, ev.evID, (int)keyOne, (int)keyTwo);
+        // The EvidenceLocation override may call base: report only the outermost call. The depth is taken back in the
+        // finalizer (runs after this, and also when the game method throws: a postfix doesn't, and the depth then
+        // stayed above zero, so no merge was ever reported again).
+        if (_mergeDepth == 1 && NetSession.Current != null) Report(CaseEventKind.MergeKeys, ev.evID, (int)keyOne, (int)keyTwo);
+    }
+
+    static void MergeFinalizer()
+    {
+        if (_mergeDepth > 0) _mergeDepth--;
     }
 
     [HarmonyPatch(typeof(Evidence), nameof(Evidence.MergeDataKeys))]
@@ -225,6 +232,7 @@ public static class CaseSync
     {
         static void Prefix() => MergePrefix();
         static void Postfix(Evidence __instance, Evidence.DataKey keyOne, Evidence.DataKey keyTwo) => MergePostfix(__instance, keyOne, keyTwo);
+        static void Finalizer() => MergeFinalizer();
     }
 
     [HarmonyPatch(typeof(EvidenceLocation), nameof(EvidenceLocation.MergeDataKeys))]
@@ -232,6 +240,7 @@ public static class CaseSync
     {
         static void Prefix() => MergePrefix();
         static void Postfix(EvidenceLocation __instance, Evidence.DataKey keyOne, Evidence.DataKey keyTwo) => MergePostfix(__instance, keyOne, keyTwo);
+        static void Finalizer() => MergeFinalizer();
     }
 
     /// <summary>Debug for F11: counts, plus one unfound evidence id to test with.</summary>

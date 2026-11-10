@@ -43,6 +43,15 @@ public static class ObjectiveSync
     const byte KindProgress = 4;       // host → clients: int caseId, str objective, float progress
     const byte KindAnswers = 1;        // (CaseResolve) client → host: int caseId, int n, n × (str name, str input, str evidence)
     const byte KindResolved = 2;       // (CaseResolve) host → clients: int caseId, byte byPlayer
+    const byte KindClosed = 3;         // (CaseResolve) either way, host relays: int caseId (the case was closed)
+
+    /// <summary>A case was closed on this machine (CaseRecordSync): client → host, host → every client.</summary>
+    internal static void SendClosed(int caseId)
+    {
+        var s = S;
+        if (s == null) return;
+        s.SendExtra(ExtraWire.Write(ExtraWire.CaseResolve, KindClosed, w => w.Write(caseId)));
+    }
 
     /// <summary>Applying the host's decision: world effects inside Complete/Resolve are skipped.</summary>
     [ThreadStatic] static bool _applying;
@@ -60,6 +69,9 @@ public static class ObjectiveSync
     /// <summary>Host: resolutions waiting for their case record to reach clients (CaseRecordSync debounces 1 s).</summary>
     static readonly List<(int caseId, byte by, float at)> _pendingResolved = new();
     const float ResolvedDelay = 1.5f;
+    /// <summary>"Resolved" waits for the case record at most this long past its time (the record's debounce is
+    /// pushed back by every change to any case).</summary>
+    const float ResolvedMaxWait = 5f;
 
     public static int Requests { get; private set; }
     public static int FactsAccepted { get; private set; }
@@ -97,6 +109,13 @@ public static class ObjectiveSync
         {
             var (caseId, by, at) = _pendingResolved[i];
             if (now < at) continue;
+            // The solved state travels in the case record; clients run Resolve on their copy. If the record is still
+            // waiting (its debounce restarts with every change), send it first and tell the clients a frame later.
+            if (CaseRecordSync.IsPending(caseId) && now < at + ResolvedMaxWait)
+            {
+                CaseRecordSync.FlushSoon();
+                continue;
+            }
             _pendingResolved.RemoveAt(i);
             S.SendExtra(ExtraWire.Write(ExtraWire.CaseResolve, KindResolved, w => { w.Write(caseId); w.Write(by); }));
             Plugin.Event($"OBJ case {caseId} resolved; told the clients");
@@ -119,6 +138,11 @@ public static class ObjectiveSync
             string name = ExtraWire.Str(r);
             float progress = r.ReadSingle();
             var obj = FindObjective(FindCase(caseId), name);
+            if (obj == null)
+            {
+                CaseRecordSync.ApplyDeferredNow(caseId); // the record that brings this objective may be held for a drag
+                obj = FindObjective(FindCase(caseId), name);
+            }
             if (obj == null || obj.isComplete || obj.progress >= progress) return;
             _applying = true;
             try { obj.SetProgress(progress); }
@@ -131,6 +155,13 @@ public static class ObjectiveSync
             string name = ExtraWire.Str(r);
             byte by = r.ReadByte();
             var obj = FindObjective(FindCase(caseId), name);
+            if (obj == null)
+            {
+                // The record that brings this objective may be held back for a mouse drag: without it the completion
+                // was dropped and the objective stayed open here once the (older) record was applied.
+                CaseRecordSync.ApplyDeferredNow(caseId);
+                obj = FindObjective(FindCase(caseId), name);
+            }
             if (obj == null || obj.isComplete) return;
             _applying = true;
             try { obj.Complete(); Completed++; }
@@ -159,6 +190,7 @@ public static class ObjectiveSync
         {
             int caseId = r.ReadInt32();
             byte by = r.ReadByte();
+            CaseRecordSync.ApplyDeferredNow(caseId); // Resolve must run on the host's solved copy, not on a held-back older one
             var c = FindCase(caseId);
             if (c == null) { Plugin.Event($"OBJ resolved case {caseId} not found here"); return; }
             _applying = true;
@@ -166,6 +198,17 @@ public static class ObjectiveSync
             catch (Exception e) { Plugin.Event($"OBJ applying resolution of case {caseId} failed: {e.Message}"); }
             finally { _applying = false; }
             Notify.Show($"Case \"{c.name}\" solved", InterfaceControls.Icon.star);
+        }
+        else if (type == ExtraWire.CaseResolve && kind == KindClosed)
+        {
+            int caseId = r.ReadInt32();
+            if (s.Role == NetSession.SessionRole.Host)
+            {
+                if (fromPlayer == null) return; // only a joined client
+                s.SendExtraExcept(data, from);
+            }
+            Plugin.Event($"OBJ case {caseId} closed by {(fromPlayer != null ? fromPlayer.ToString() : "the host")}");
+            CaseRecordSync.ApplyClosed(caseId);
         }
     }
 

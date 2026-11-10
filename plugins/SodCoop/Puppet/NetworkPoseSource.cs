@@ -50,6 +50,10 @@ public sealed class NetworkPoseSource : IPoseSource
             var b = _buffer[1];
             float k = Mathf.InverseLerp(a.Time, b.Time, t);
             pose = b;
+            // The time is interpolated too: BodyDriver measures the walk speed as distance / time between the poses
+            // it is handed, and with b's time it divided one frame's movement by a whole sample interval (walk
+            // animation at 1/3-1/6 speed, changing with the frame rate).
+            pose.Time = Mathf.Lerp(a.Time, b.Time, k);
             pose.Position = Vector3.Lerp(a.Position, b.Position, k);
             pose.Yaw = Mathf.LerpAngle(a.Yaw, b.Yaw, k);
         }

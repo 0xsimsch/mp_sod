@@ -34,11 +34,30 @@ public static class World
         var city = CityData.Instance;
         var ptr = city != null ? city.Pointer : IntPtr.Zero;
         if (ptr == _city) return;
-        bool hadWorld = _city != IntPtr.Zero;
         _city = ptr;
-        if (!hadWorld || ptr == IntPtr.Zero) return;
+        if (ptr == IntPtr.Zero) return;
+        // Also a reload that went through "no city" for a frame (old world → null → new world): that used to
+        // pass for a first world and reset nothing.
+        if (!_hadWorld) { _hadWorld = true; return; }
         Generation++;
         Plugin.Event($"WORLD reloaded (generation {Generation}); resetting caches");
         Reloaded?.Invoke();
+    }
+
+    static bool _hadWorld;
+
+    /// <summary>
+    /// A reload the city pointer can't show: the join load from inside a world keeps the CityData object
+    /// (SnapshotSync). Same effect as a detected reload.
+    /// </summary>
+    public static void NotifyReloaded(string why)
+    {
+        var city = CityData.Instance;
+        _city = city != null ? city.Pointer : IntPtr.Zero;
+        _hadWorld = true;
+        Generation++;
+        Plugin.Event($"WORLD reloaded (generation {Generation}, {why}); resetting caches");
+        try { Reloaded?.Invoke(); }
+        catch (Exception e) { Plugin.Event($"WORLD reload handlers failed: {e.Message}"); }
     }
 }

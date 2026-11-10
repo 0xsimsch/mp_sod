@@ -126,15 +126,61 @@ public static class SnapshotSync
     static NetSession _loadedFor;
     static bool _duplicateLogged;
 
+    // Client: is the world we run the host's? A client that joins from inside its own world keeps playing it until
+    // the snapshot has arrived and loaded; its item/door/world events there carry ids of another world and the host
+    // applied them to its objects. No snapshot at all (a host that has us already, a test host with the same world
+    // loaded): the world counts as the host's a few seconds after the welcome.
+    const float NoSnapshotGrace = 5f;
+    static float _welcomedAt = -1f;
+    static bool _snapshotIncoming;
+    /// <summary>From the switch to the loading screen until the joined world runs (CleanupAfterLoad).</summary>
+    static bool _joinLoading;
+
+    /// <summary>Client: welcomed (again) by the host.</summary>
+    public static void OnWelcomed()
+    {
+        _welcomedAt = UnityEngine.Time.unscaledTime;
+        _snapshotIncoming = false;
+        _duplicateLogged = false;
+    }
+
+    /// <summary>Client: the host is gone. Its next welcome may come with a new snapshot, which must load.</summary>
+    public static void ForgetLoaded()
+    {
+        _loadedFor = null;
+        _snapshotIncoming = false;
+        _buffer = null;
+        _cityBuffer = null;
+    }
+
+    /// <summary>Client: our world is the host's, so what our player does in it may be sent.</summary>
+    public static bool ClientWorldIsHosts
+    {
+        get
+        {
+            if (_joinLoading) return false;                                            // the join load is under way
+            if (_loadedFor != null && _loadedFor == NetSession.Current) return true;   // loaded for this session
+            if (_snapshotIncoming) return false;                                       // chunks arriving
+            return _welcomedAt >= 0f && UnityEngine.Time.unscaledTime - _welcomedAt > NoSnapshotGrace;
+        }
+    }
+
     /// <summary>Client: one chunk arrived.</summary>
     public static void OnChunk(SnapshotChunkMsg m)
     {
         if (_loadedFor != null && _loadedFor == NetSession.Current)
         {
-            if (!_duplicateLogged) Plugin.Event("SNAPSHOT ignoring a second copy of the host's world (already loaded in this session)");
+            if (!_duplicateLogged)
+            {
+                Plugin.Event("SNAPSHOT ignoring a second copy of the host's world (already loaded in this session)");
+                // The host holds our events from its capture until we say the world runs: it does, so say so
+                // (otherwise it held everything, the body map included, for 5 minutes).
+                if (_pendingDelete == null) NetSession.Current?.SendWorldLoaded();
+            }
             _duplicateLogged = true;
             return;
         }
+        _snapshotIncoming = true; // from here until the joined world runs, our world isn't the host's
         if (m.Kind == 1) { OnCityChunk(m); return; }
         if (_buffer == null || _buffer.Length != m.Total || _hash != m.Hash)
         {
@@ -268,6 +314,7 @@ public static class SnapshotSync
     static string _pendingDelete;
     static bool _sawLoading;
     static int _generationAtLoad;
+    static bool _worldAtLoad;
     static float _loadStartedAt;
     static int _keepMoney = -1;
 
@@ -288,8 +335,10 @@ public static class SnapshotSync
             rs.loadSaveGame = true;
             rs.newGameLoadCity = false;
             _pendingDelete = path;
+            _joinLoading = true;
             _sawLoading = false;
             _generationAtLoad = World.Generation;
+            _worldAtLoad = CityData.Instance != null;
             _loadStartedAt = UnityEngine.Time.unscaledTime;
             _joinWaitLogAt = -1f;
             // Design: money is per player. The snapshot carries the host's, so keep ours.
@@ -339,6 +388,9 @@ public static class SnapshotSync
         // world, play stayed true and CityData kept its object through the whole load, so only the city constructor
         // showed it (seen with 0.9.46: the join never finished and the host held our events, its body included, 5 min).
         bool loading = SessionData.Instance == null || !SessionData.Instance.play || CityData.Instance == null || !World.Ready;
+        // The city pointer didn't show this load (CityData kept its object): everything keyed to the old world's
+        // objects (door/interactable indexes, known blood, forced rooms) must still reset, once, as the load starts.
+        if (loading && !_sawLoading && _worldAtLoad && World.Generation == _generationAtLoad) World.NotifyReloaded("join load");
         if (loading || World.Generation != _generationAtLoad) _sawLoading = true;
         if (loading) return;
         if (!_sawLoading)
@@ -346,6 +398,7 @@ public static class SnapshotSync
             if (UnityEngine.Time.unscaledTime - _loadStartedAt < JoinLoadGiveUp) return;
             Plugin.Event($"SNAPSHOT never saw the load happen; taking the running world as the host's after {JoinLoadGiveUp:F0} s");
         }
+        _joinLoading = false; // the host's world runs here: what we do in it from now on (restored items included) is sent
         if (_keepMoney >= 0 && GameplayController.Instance != null)
         {
             int hostMoney = GameplayController.Instance.money;

@@ -355,6 +355,17 @@ public static class PhoneSync
             Send(Describe(__instance, PhoneEventKind.State));
             if (newState == TelephoneController.CallState.ended) _mirrored.Remove(key);
         }
+
+        /// <summary>If SetCallState throws, the postfix doesn't run: the remote bodies must still be players again.</summary>
+        static void Finalizer(List<Human> __state)
+        {
+            if (__state == null) return;
+            foreach (var h in __state)
+            {
+                try { if (h != null && !h.WasCollected && !h.isPlayer) h.isPlayer = true; }
+                catch { /* the body is gone */ }
+            }
+        }
     }
 
     /// <summary>Host: no phone dialog for the host's player while applying a client's phone action.</summary>

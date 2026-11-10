@@ -126,7 +126,7 @@ public sealed class RemotePlayerBody
             if (!KnockedOut) KeepAnimated();
             _marker.Ensure(Human, Owner.Id.Value);
             DropCitizenProps();
-            if (!_combatShown) ArmWith(null);
+            if (!_combatShown && !_weaponDrawn) ArmWith(null); // a drawn weapon keeps its own preset (stance, swing)
             RepairModelLayers();
             RepairOutfit();
             var outfit = OutfitStatus();
@@ -664,6 +664,11 @@ public sealed class RemotePlayerBody
             Human.animationController.SetRagdoll(false, false);
             if (Human.animationController.mainAnimator != null) Human.animationController.mainAnimator.enabled = true;
             ResetAnimation();
+            // The animator is neutral again: forget what we had shown, so the next frame re-applies the seat, the
+            // drawn weapon's stance and the arms for what the player is doing now.
+            _armsShown = (CitizenAnimationController.ArmsBoolSate)255;
+            _phoneShown = _sitShown = _lieShown = _crouchIdleShown = _weaponDrawn = _combatShown = false;
+            Human.isInBed = false;
         }
         if (ko) IllegalActionActive = false;
     }

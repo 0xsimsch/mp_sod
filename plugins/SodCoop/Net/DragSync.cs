@@ -32,6 +32,8 @@ public static class DragSync
     public static void Tick(float now)
     {
         if (S == null || !World.Ready) return;
+        ReleaseSilent(now);
+        if (!S.ClientWorldJoined) return; // a client still in its own world: its citizens aren't the host's
         Human h = null;
         try
         {
@@ -107,6 +109,42 @@ public static class DragSync
 
     static readonly HashSet<int> _held = new();
 
+    // The dragging player vanished mid-drag (timed out, left) or its final pose never came (no limb snapshot once
+    // the citizen woke): the limbs stayed kinematic at the last pose, the body hanging in the air. Poses come 10 times
+    // a second, so a held body without one for SilentRelease seconds is let go here.
+    const float SilentRelease = 2f;
+    static readonly Dictionary<int, (float at, CitizenOutfitController.CharacterAnchor[] anchors)> _heldLast = new();
+
+    static void ReleaseSilent(float now)
+    {
+        if (_heldLast.Count == 0) return;
+        List<int> silent = null;
+        foreach (var kv in _heldLast) if (now - kv.Value.at > SilentRelease) (silent ??= new List<int>()).Add(kv.Key);
+        if (silent == null) return;
+        foreach (var id in silent) Release(id, "no drag pose for a while");
+    }
+
+    /// <summary>Give a held body's limbs back to physics.</summary>
+    static void Release(int humanId, string why)
+    {
+        if (!_heldLast.Remove(humanId, out var last)) { _held.Remove(humanId); return; }
+        _held.Remove(humanId);
+        try
+        {
+            if (!World.Ready || CityData.Instance == null || !CityData.Instance.citizenDictionary.TryGetValue(humanId, out var h) || h == null) return;
+            var oc = h.outfitController;
+            if (oc == null) return;
+            foreach (var a in last.anchors)
+            {
+                var t = oc.GetBodyAnchor(a);
+                var rb = t != null ? t.GetComponent<Rigidbody>() : null;
+                if (rb != null) rb.isKinematic = false;
+            }
+            Plugin.Event($"DRAG citizen {humanId} released ({why})");
+        }
+        catch (Exception e) { Plugin.Event($"DRAG release failed: {e.Message}"); }
+    }
+
     static void Apply(Human h, (CitizenOutfitController.CharacterAnchor a, Vector3 p, Quaternion q)[] limbs, bool end)
     {
         try
@@ -114,6 +152,13 @@ public static class DragSync
             var oc = h.outfitController;
             if (oc == null) return;
             if (_held.Add(h.humanID)) Plugin.Event($"DRAG citizen {h.humanID} \"{h.citizenName}\" is being dragged by another player");
+            if (end) _heldLast.Remove(h.humanID);
+            else
+            {
+                var anchors = new CitizenOutfitController.CharacterAnchor[limbs.Length];
+                for (int i = 0; i < limbs.Length; i++) anchors[i] = limbs[i].a;
+                _heldLast[h.humanID] = (UnityEngine.Time.unscaledTime, anchors);
+            }
             foreach (var (a, p, q) in limbs)
             {
                 var t = oc.GetBodyAnchor(a);
@@ -134,9 +179,15 @@ public static class DragSync
         catch (Exception e) { Plugin.Event($"DRAG apply failed: {e.Message}"); }
     }
 
+    /// <summary>Session over or host gone: nobody will send the final pose any more, so let every held body go.</summary>
     public static void Reset()
     {
         _dragging = -1;
+        foreach (var id in new List<int>(_heldLast.Keys)) Release(id, "session over");
+        _heldLast.Clear();
         _held.Clear();
     }
+
+    // The citizens of a replaced world are gone: nothing to release.
+    static DragSync() => World.Reloaded += () => { _heldLast.Clear(); _held.Clear(); };
 }

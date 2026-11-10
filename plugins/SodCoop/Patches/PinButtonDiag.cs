@@ -22,13 +22,13 @@ static class PinButtonDiag
         return s;
     }
 
-    static void Repair(PinFolderButtonController b)
+    static void Repair(PinFolderButtonController b, bool quiet = false)
     {
         try
         {
             if (!Dead(b.parentWindow)) return;
             var w = b.GetComponentInParent<InfoWindow>();
-            if (Dead(w)) { Plugin.Event($"PIN {PathOf(b.transform)} has no parent window and none above it"); return; }
+            if (Dead(w)) { if (!quiet) Plugin.Event($"PIN {PathOf(b.transform)} has no parent window and none above it"); return; }
             b.parentWindow = w;
             Plugin.Event($"PIN {PathOf(b.transform)}: parent window was missing; set to {w.name}");
         }
@@ -37,6 +37,15 @@ static class PinButtonDiag
 
     [HarmonyPatch(typeof(PinFolderButtonController), nameof(PinFolderButtonController.OnPointerDown))]
     static class PointerDown { static void Prefix(PinFolderButtonController __instance) => Repair(__instance); }
+
+    /// <summary>
+    /// The needle's redraw (pinned / unpinned look) returns at once without a parent window, and the window calls it
+    /// whenever its pin state changes (InfoWindow.OnWindowPinnedChange): a pin made without pressing this needle (new
+    /// sticky note, the other player's pin, the board rebuilt from a case record) left the needle looking unpinned
+    /// until the first press repaired it. Repair before every redraw too (quietly: this runs often).
+    /// </summary>
+    [HarmonyPatch(typeof(PinFolderButtonController), nameof(PinFolderButtonController.VisualUpdate))]
+    static class Redraw { static void Prefix(PinFolderButtonController __instance) => Repair(__instance, true); }
 
     [HarmonyPatch(typeof(PinFolderButtonController), nameof(PinFolderButtonController.OnLeftClick))]
     static class LeftClick { static void Prefix(PinFolderButtonController __instance) => Repair(__instance); }

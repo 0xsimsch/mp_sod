@@ -130,7 +130,23 @@ public static class NoteSync
         var local = PlayerRegistry.Local;
         if (s == null || s.Role != NetSession.SessionRole.Client || local == null || local.Id.Value == 0) return;
         int floor = local.Id.Value * StickyRange;
-        if (InterfaceController.assignStickyNoteID < floor) InterfaceController.assignStickyNoteID = floor;
+        if (InterfaceController.assignStickyNoteID >= floor) return;
+        // First note since the world loaded (the counter is the host's again): don't start at the range's floor if
+        // notes from this range exist already (ours from an earlier session, or a previous player with this id).
+        int top = floor + StickyRange;
+        try
+        {
+            var dict = GameplayController.Instance?.evidenceDictionary;
+            if (dict != null)
+                foreach (var kv in dict)
+                {
+                    string key = kv.Key;
+                    if (key == null || !key.StartsWith(StickyNotePrefix)) continue;
+                    if (int.TryParse(key.Substring(StickyNotePrefix.Length), out int n) && n >= floor && n < top) floor = n + 1;
+                }
+        }
+        catch (Exception e) { Plugin.Event($"NOTES sticky note id scan failed: {e.Message}"); }
+        InterfaceController.assignStickyNoteID = floor;
     }
 
     [HarmonyPatch(typeof(CasePanelController), nameof(CasePanelController.NewStickyNote))]
