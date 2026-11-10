@@ -77,6 +77,14 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.65: hidden prints synced, players leave no footprints, body drag hardened (protocol v49, untested in game)
+
+- **Fingerprints (G4, `PrintSync`):** the hidden prints on objects (`Interactable.df`: owner, time, life and the random seed that places the print) were made on each machine by itself. The host's are now sent (batched every 0.5 s); a client adds no citizen prints of its own and sends its own player's touches to the host. Prints keep the owner id as stored, so a player's prints show as "the player's" on both machines.
+- **Footprints:** only the host's citizens leave them. `Human.OnFootstep` runs from animation events (not hookable, and it also plays the step sound), so `GameplayController.footprintsList` is swept 4×/s instead: the host removes players' footprints and sends the citizens'; a client removes everything it generated locally and takes the host's (position, rotation, dirt, blood, time as on the host). **Players leave no footprints** (user decision).
+- Limits: prints made before a client finished loading come from the snapshot only; print removal (expiry is by time on both sides) is not sent.
+- **Body drag (`DragSync`):** the host log of 0.9.63 shows a 9 s drag sent without error, the receiving side's log wasn't available, so the cause of "the body doesn't move for the other player" is not confirmed. Hardened where the receive path could fail: the body is made a ragdoll first if it isn't one there (`SetRagdoll` is a no-op when it already is: it compares `ai.isRagdoll`), limb poses are written parents-first, and the dragger keeps streaming for 1.5 s after letting go so the body comes to rest in the same place. New log lines say what happened: `DRAG sending citizen … N limbs`, `DRAG … first pose applied: N limbs found, M with physics, moved up to X m`.
+- F11 status line: `drag sent/applied` and `prints[…]` counters.
+
 ## 0.9.64: friend list in the menu (untested in game)
 
 - **Menu:** "Join Friend" is replaced by one **Join <name>** button per friend who is hosting right now (up to 5, sorted by name; names over 16 characters are cut). With none, a greyed-out "No Friends Hosting" stands there instead. The list is polled from Steam every 2 s while the menu is up (`CoopMenu.PollFriends`, `SteamLobby.FriendLobbies` is now static), so a friend who starts hosting appears without reopening the menu. A click joins that friend's lobby directly; `JoinLobby` in the config is not kept.
@@ -101,7 +109,7 @@ From the first real tests with a friend (protocol v23):
 - **Switches (G17):** citizen-made switch changes far from every client are remembered and sent when a client comes within 60 m. A client's own citizens no longer flip switches anywhere (was: only near the player).
 - **Citizens:** carry pose and the weapon's combat-arms pose are part of the citizen state.
 
-Not done: G23 (sentry double hits), and the rest of `analysis/SYNC_GAPS.md` (G2–G4, G8–G10, G12–G14, G16, G18, G19, G21, P2).
+Not done: G23 (sentry double hits), and the rest of `analysis/SYNC_GAPS.md` (G2, G3, G4 except prints (0.9.65), G8–G10, G12–G14, G16, G18, G19, G21, P2).
 
 ## 0.9.61: sync audit fixes (protocol v47, untested in game)
 

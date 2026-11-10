@@ -10,8 +10,9 @@ namespace SodCoop.Net;
 /// Dragging a body (a knocked-out or dead citizen's ragdoll): the game pulls the ragdoll with physics on the dragging
 /// player's machine only (<c>InteractionController.currentlyDragging</c>, a <c>RigidbodyDragObject</c>), so the body
 /// never moved for anyone else. While a player drags, the dragged citizen's limb pose (the game's own
-/// <c>CitizenAnimationController.GetLimbSnapshotWorld</c>) goes out ~10 times a second; receivers hold those limbs
-/// kinematic at the pose, and on the final pose put them down and let physics take over again. The host applies a
+/// <c>CitizenAnimationController.GetLimbSnapshotWorld</c>) goes out ~10 times a second, and for 1.5 s after letting
+/// go while the body settles; receivers make the body a ragdoll if it isn't one, hold those limbs kinematic at the
+/// pose (parents first), and on the final pose put them down and let physics take over again. The host applies a
 /// client's drag and relays it.
 /// </summary>
 public static class DragSync
@@ -27,6 +28,13 @@ public static class DragSync
     static float _next;
 
     static NetSession S => NetSession.Current;
+
+    // After letting go the body still falls and settles on the dragger's machine: keep streaming for a moment
+    // and only then hand it to everyone's own physics, so it comes to rest in the same place.
+    const float SettleSeconds = 1.5f;
+    static int _settling = -1;
+    static float _settleUntil;
+    static bool _sendLogged;
 
     /// <summary>Per frame, both roles: stream the body this player is dragging.</summary>
     public static void Tick(float now)
@@ -44,18 +52,48 @@ public static class DragSync
 
         if (h != null)
         {
-            if (_dragging != h.humanID) { _dragging = h.humanID; Plugin.Event($"DRAG started dragging citizen {h.humanID} \"{h.citizenName}\""); }
+            if (_settling >= 0 && _settling != h.humanID) EndSettle();
+            _settling = -1; // grabbed again while settling: it's a drag again
+            if (_dragging != h.humanID)
+            {
+                _dragging = h.humanID;
+                _sendLogged = false;
+                Plugin.Event($"DRAG started dragging citizen {h.humanID} \"{h.citizenName}\" (dead={h.isDead})");
+            }
             if (now < _next) return;
             _next = now + Interval;
             Send(h, KindPose);
         }
         else if (_dragging >= 0)
         {
-            int id = _dragging;
+            _settling = _dragging;
+            _settleUntil = now + SettleSeconds;
             _dragging = -1;
-            if (CityData.Instance != null && CityData.Instance.citizenDictionary.TryGetValue(id, out var last) && last != null) Send(last, KindEnd);
-            Plugin.Event($"DRAG let go of citizen {id}");
+            Plugin.Event($"DRAG let go of citizen {_settling}");
         }
+        if (_settling >= 0 && h == null)
+        {
+            if (now >= _settleUntil) EndSettle();
+            else if (now >= _next)
+            {
+                _next = now + Interval;
+                if (Find(_settling, out var body)) Send(body, KindPose); else _settling = -1;
+            }
+        }
+    }
+
+    static void EndSettle()
+    {
+        int id = _settling;
+        _settling = -1;
+        if (Find(id, out var last)) Send(last, KindEnd);
+        Plugin.Event($"DRAG citizen {id} came to rest: final pose sent ({Sent} poses this session)");
+    }
+
+    static bool Find(int id, out Human h)
+    {
+        h = null;
+        return CityData.Instance != null && CityData.Instance.citizenDictionary.TryGetValue(id, out h) && h != null;
     }
 
     static void Send(Human h, byte kind)
@@ -63,7 +101,11 @@ public static class DragSync
         try
         {
             var snap = h.animationController != null ? h.animationController.GetLimbSnapshotWorld() : null;
-            if (snap == null || snap.Count == 0) return;
+            if (snap == null || snap.Count == 0)
+            {
+                if (!_sendLogged) { _sendLogged = true; Plugin.Event($"DRAG citizen {h.humanID} gave no limb snapshot: nothing sent"); }
+                return;
+            }
             var limbs = new List<(byte a, Vector3 p, Quaternion r)>();
             for (int i = 0; i < snap.Count; i++)
             {
@@ -71,7 +113,8 @@ public static class DragSync
                 if (s?.anchorConfig == null) continue;
                 limbs.Add(((byte)s.anchorConfig.anchor, s.worldPos, s.worldRot));
             }
-            if (limbs.Count == 0) return;
+            if (limbs.Count == 0) { if (!_sendLogged) { _sendLogged = true; Plugin.Event($"DRAG citizen {h.humanID} has no limb anchors: nothing sent"); } return; }
+            if (!_sendLogged) { _sendLogged = true; Plugin.Event($"DRAG sending citizen {h.humanID}: {limbs.Count} limbs, torso at {limbs[0].p}"); }
             S.SendExtra(ExtraWire.Write(ExtraWire.Drag, kind, w =>
             {
                 w.Write(h.humanID);
@@ -102,12 +145,18 @@ public static class DragSync
             limbs[i] = (a, p, q);
         }
         if (s.Role == NetSession.SessionRole.Host) s.SendExtraExcept(data, from); // pass a client's drag on
-        if (id == _dragging) return; // we're dragging it ourselves: ours wins here
-        if (CityData.Instance == null || !CityData.Instance.citizenDictionary.TryGetValue(id, out var h) || h == null) return;
+        if (id == _dragging || id == _settling) return; // we're dragging it ourselves: ours wins here
+        if (!World.Ready || !s.ClientWorldJoined) return;
+        if (CityData.Instance == null || !CityData.Instance.citizenDictionary.TryGetValue(id, out var h) || h == null)
+        {
+            if (_unknown.Add(id)) Plugin.Event($"DRAG pose for citizen {id}, who isn't in this world: ignored");
+            return;
+        }
         Apply(h, limbs, kind == KindEnd);
     }
 
     static readonly HashSet<int> _held = new();
+    static readonly HashSet<int> _unknown = new();
 
     // The dragging player vanished mid-drag (timed out, left) or its final pose never came (no limb snapshot once
     // the citizen woke): the limbs stayed kinematic at the last pose, the body hanging in the air. Poses come 10 times
@@ -150,8 +199,21 @@ public static class DragSync
         try
         {
             var oc = h.outfitController;
-            if (oc == null) return;
-            if (_held.Add(h.humanID)) Plugin.Event($"DRAG citizen {h.humanID} \"{h.citizenName}\" is being dragged by another player");
+            if (oc == null) { if (_unknown.Add(-h.humanID - 1)) Plugin.Event($"DRAG citizen {h.humanID} has no outfit controller here: can't pose it"); return; }
+            bool first = _held.Add(h.humanID);
+            if (first)
+            {
+                // The limbs only take a pose while the body is a ragdoll: an animated body (knocked out there, still
+                // standing or lying by animation here) would be put back by its Animator every frame.
+                bool wasRagdoll = h.ai != null && h.ai.isRagdoll;
+                if (!wasRagdoll && h.animationController != null)
+                {
+                    try { h.animationController.SetRagdoll(true, h.isDead); }
+                    catch (Exception e) { Plugin.Event($"DRAG could not make citizen {h.humanID} a ragdoll: {e.Message}"); }
+                }
+                Plugin.Event($"DRAG citizen {h.humanID} \"{h.citizenName}\" is being dragged by another player " +
+                             $"(dead={h.isDead}, ragdoll here before={wasRagdoll}, {limbs.Length} limbs)");
+            }
             if (end) _heldLast.Remove(h.humanID);
             else
             {
@@ -159,13 +221,27 @@ public static class DragSync
                 for (int i = 0; i < limbs.Length; i++) anchors[i] = limbs[i].a;
                 _heldLast[h.humanID] = (UnityEngine.Time.unscaledTime, anchors);
             }
+
+            // Parents before children: a world pose written to a parent afterwards would carry its children along.
+            var parts = new List<(int depth, Transform t, Vector3 p, Quaternion q)>(limbs.Length);
             foreach (var (a, p, q) in limbs)
             {
                 var t = oc.GetBodyAnchor(a);
                 if (t == null) continue;
+                int depth = 0;
+                for (var up = t.parent; up != null && depth < 32; up = up.parent) depth++;
+                parts.Add((depth, t, p, q));
+            }
+            parts.Sort((x, y) => x.depth.CompareTo(y.depth));
+            int bodies = 0;
+            float moved = 0f;
+            foreach (var (_, t, p, q) in parts)
+            {
+                if (first) moved = Mathf.Max(moved, Vector3.Distance(t.position, p));
                 var rb = t.GetComponent<Rigidbody>();
                 if (rb != null)
                 {
+                    bodies++;
                     rb.isKinematic = !end;
                     rb.position = p;
                     rb.rotation = q;
@@ -173,6 +249,7 @@ public static class DragSync
                 }
                 t.SetPositionAndRotation(p, q);
             }
+            if (first) Plugin.Event($"DRAG citizen {h.humanID} first pose applied: {parts.Count} limbs found, {bodies} with physics, moved up to {moved:F2} m");
             if (end) { _held.Remove(h.humanID); Plugin.Event($"DRAG citizen {h.humanID} put down"); }
             Applied++;
         }
@@ -183,6 +260,8 @@ public static class DragSync
     public static void Reset()
     {
         _dragging = -1;
+        _settling = -1;
+        _unknown.Clear();
         foreach (var id in new List<int>(_heldLast.Keys)) Release(id, "session over");
         _heldLast.Clear();
         _held.Clear();

@@ -214,6 +214,9 @@ Summary: P __  F __  ! __  ~ __  - __     Defects filed: DEFECT-__ …
 | CRIM-8 | Pickpocket a citizen's key, both players target the same citizen | Item ownership resolves on host; no dupe | ItemSync log | |
 | CRIM-9 | Knock a citizen out (client), then leave | KO'd citizen stays KO host-side, others react, body can be dragged | log: `DRAG started dragging citizen …` | |
 | CRIM-10 | Client drags a body into a building and dumps it | Drag + drop position synced; trespass/crime judged on host | `DRAG … put down` | |
+| CRIM-10a | Host drags a dead body across the room and drops it; then the client does the same | The other player sees it move and come to rest in the same place | both logs: `DRAG sending citizen …` on the dragger, `DRAG … first pose applied: N limbs found, M with physics` on the other | |
+| CRIM-10b | Both scan the same door handle / murder weapon after a citizen used it | Same prints at the same spots with the same owner on both machines | host log: `PRINT first fingerprints sent`; client: `PRINT first fingerprint from the other side` | |
+| CRIM-10c | Both look at the same floor with the scanner after citizens walked through; each player walks through dirt/blood | Same citizen footprints on both; no footprints from either player | F11: `prints[… foot sent/applied/dropped]` | |
 | CRIM-11 | Client murders a citizen | Death + murder record replay; news later mentions it | log: `DEATH citizen … — full replay`, `NEWS paper from host applied` | |
 | CRIM-12 | Gun fired near witnesses (either side) | Enforcer dispatch is host-only; both get the pursuit HUD | no `CIT blocked` on host, yes on client | |
 | CRIM-13 | Fine payment (kiosk/police, either side) | Fines are per player — one player's fine list doesn't pay the other's | `STATUS fine … is P?'s` | |
