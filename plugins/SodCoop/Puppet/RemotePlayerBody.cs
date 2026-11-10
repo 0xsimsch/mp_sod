@@ -213,6 +213,7 @@ public sealed class RemotePlayerBody
     }
 
     bool _sitting, _lying, _bedRight, _sitShown, _lieShown;
+    float _lieDiagAt;
     Net.PlayerActivity _activity;
     CitizenAnimationController.ArmsBoolSate _armsShown = (CitizenAnimationController.ArmsBoolSate)255;
     bool _phoneShown;
@@ -374,6 +375,7 @@ public sealed class RemotePlayerBody
             Human.isInBed = lie;
             anim.SetInBed(lie, false, _bedRight, false);
             _lieShown = lie;
+            _lieDiagAt = lie ? Time.time + 3f : 0f; // after the get-into-bed animation
         }
     }
 
@@ -444,6 +446,8 @@ public sealed class RemotePlayerBody
             UpdateFlashlight();
             if (_sitting || _lying || _sitShown || _lieShown) UpdateSeated();
             if (!_sitShown && !_lieShown) UpdateCrouch();
+            else if (_shownScaleY != 1f || _crouchIdleShown) ResetCrouch(); // sat/lay down from a crouch: full size
+            if (_lieShown && _lieDiagAt > 0f && Time.time >= _lieDiagAt) { _lieDiagAt = 0f; BedDiag.Partner(Owner.ToString(), Human); }
             UpdateDrawnWeapon();
             UpdateActivity();
             if (_held == Net.HeldKind.Carried && _heldId >= 0 && !_heldWasThrown &&
