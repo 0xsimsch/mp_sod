@@ -137,21 +137,61 @@ public sealed class RemotePlayerBody
     }
 
     /// <summary>
-    /// The game's distance LOD (see Patches/BodyLodPatch) is not the only thing that can freeze the citizen's
-    /// animator — anything that leaves it disabled while we keep driving the body shows as a sliding frozen
-    /// pose. Switch it back in the 0.5 s guard; LateApply stops writing the neck while it is off, so the head
-    /// can't wind up.
+    /// Keep the puppet's animator actually posing the body. Several mechanisms stop its output while it stays
+    /// enabled — Unity's renderer culling (cullingMode CullUpdateTransforms/CullCompletely), speed 0, and
+    /// AnimatePhysics (tied to the game's throttled physics tick) — and any of them shows as the 0.9.58 bug:
+    /// walk freezes while LateApply's neck offset winds on (head spin). All are corrected in the 0.5 s guard;
+    /// the game's own <c>paused</c> (SetPauseAnimation) is respected.
     /// </summary>
     bool _animatorWasOff;
+    Transform _armBone;
+    Quaternion _lastArmRot;
+    Vector3 _lastArmPos;
+    float _nextArmSample, _stuckSince, _nextStuckLog;
 
     void KeepAnimated()
     {
-        var animator = Human.animationController != null ? Human.animationController.mainAnimator : null;
+        var anim = Human.animationController;
+        var animator = anim != null ? anim.mainAnimator : null;
         if (animator == null) return;
-        if (animator.enabled) { _animatorWasOff = false; return; }
+        if (animator.cullingMode != AnimatorCullingMode.AlwaysAnimate) animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+        if (animator.updateMode != AnimatorUpdateMode.Normal) animator.updateMode = AnimatorUpdateMode.Normal;
+        if (!anim.paused && animator.speed <= 0f) animator.speed = anim.unpausedAnimatorSpeed > 0.01f ? anim.unpausedAnimatorSpeed : 1f;
+        if (animator.enabled) { _animatorWasOff = false; CheckFrozenPose(animator, anim); return; }
         animator.enabled = true;
         if (!_animatorWasOff) Plugin.Event($"{Owner} body: animator was disabled, switched it back on");
         _animatorWasOff = true;
+    }
+
+    /// <summary>
+    /// Watchdog for still unknown pose freezes: an arm bone that doesn't move for a second while the body walks
+    /// means no pose comes out of the animator — log its whole state (every 10 s) and re-bind through the game's
+    /// own force-update.
+    /// </summary>
+    void CheckFrozenPose(Animator animator, CitizenAnimationController anim)
+    {
+        if (Hidden || _sitting || _lying || _sitShown || _lieShown) { _stuckSince = 0f; return; }
+        float now = Time.unscaledTime;
+        if (now < _nextArmSample) return;
+        _nextArmSample = now + 0.25f;
+        if (_armBone == null) { _armBone = animator.GetBoneTransform(HumanBodyBones.LeftUpperArm); return; }
+        var rot = _armBone.localRotation;
+        bool still = Quaternion.Angle(rot, _lastArmRot) < 0.05f && (_armBone.localPosition - _lastArmPos).sqrMagnitude < 1e-8f;
+        _lastArmRot = rot;
+        _lastArmPos = _armBone.localPosition;
+        if (!still || Human.currentMovementSpeed < 0.5f) { _stuckSince = 0f; return; }
+        if (_stuckSince <= 0f) { _stuckSince = now; return; }
+        if (now - _stuckSince < 1f || now < _nextStuckLog) return;
+        _nextStuckLog = now + 10f;
+        var cam = Camera.main;
+        var st = animator.GetCurrentAnimatorStateInfo(0);
+        Plugin.Event($"FREEZE {Owner}: arm still for {now - _stuckSince:F1} s while moving at {Human.currentMovementSpeed:F1} m/s — " +
+            $"animator enabled={animator.enabled} speed={animator.speed:F2} culling={animator.cullingMode} update={animator.updateMode} " +
+            $"paused={(anim.paused ? "by game" : "no")}, state={st.fullPathHash} norm={st.normalizedTime:F2} stateSpeed={st.speed:F2}, " +
+            $"{(cam != null ? Vector3.Distance(cam.transform.position, Human.transform.position) : -1f):F0} m, visible={Human.visible}, " +
+            $"object {(animator.gameObject.activeInHierarchy ? "active" : "INACTIVE")}");
+        try { animator.Rebind(); anim.ForceUpdateAnimationSate(true); }
+        catch (System.Exception e) { Plugin.Event($"{Owner} body: animation force-refresh failed: {e.Message}"); }
     }
 
     // Seen (two-machine test, 0.9.50): the nametag 3 m away in plain view, no body under it, while visible=True and all

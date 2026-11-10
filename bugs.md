@@ -11,6 +11,14 @@
     its neck offset onto the frozen bone every frame (the head spin). BodyLodPatch skips the LOD pass for possessed
     bodies, RemotePlayerBody.KeepAnimated switches a disabled animator back on in the 0.5 s guard, and LateApply
     only writes the neck while the animator runs. Untested.
+  - tested 0.9.58: still happening most of the time, and no LOD switch is visible at that distance - so the freeze
+    is not (only) Human.UpdateLODs. The head keeps spinning means our neck write ran, so the animator was still
+    "enabled" - something else stopped its output.
+  - 0.9.60: KeepAnimated now pins the puppet's animator so no output-stop survives the 0.5 s guard:
+    cullingMode AlwaysAnimate (Unity stops animating when it deems the renderers invisible), updateMode Normal
+    (AnimatePhysics runs on the throttled physics tick), speed back up unless the game flagged it paused, and
+    enabled back on. New CheckFrozenPose watchdog: an arm bone still for 1 s while the body walks logs the whole
+    animator state (FREEZE line in sodcoop.log) and rebinds via the game's ForceUpdateAnimationSate.
 - on the case board for the client the needle indicator is optically in unpinned state but in reality its pinned after a new pin was created.
 
 * - when lying in bed one floats above the bed and rotating the mouse still rotates the person horizontally. the height offset is like 2x the height of the bed.
