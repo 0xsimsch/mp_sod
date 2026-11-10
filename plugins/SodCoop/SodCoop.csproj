@@ -34,6 +34,7 @@
     <Reference Include="$(InteropDir)/UnityEngine.AudioModule.dll" Private="false" />
     <Reference Include="$(InteropDir)/UnityEngine.TextRenderingModule.dll" Private="false" />
     <Reference Include="$(InteropDir)/com.rlabrecque.steamworks.net.dll" Private="false" />
+    <Reference Include="$(InteropDir)/FMODUnity.dll" Private="false" /> <!-- EventInstance: return type of AudioController.PlayWorldOneShot -->
   </ItemGroup>
 
   <ItemGroup>

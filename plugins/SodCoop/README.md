@@ -77,6 +77,15 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.67: fight sounds on every machine (protocol v49, new message 57, untested in game)
+
+- Question: does the client hear hits? Read from the binary: only its own. A player's punch / weapon impact is played in `FirstPersonItemController.MeleeAttack` and `CounterAttack` (`AudioControls.punchHit*`, the weapon's `impactEvent`) on that player's machine. A citizen's attack sound is `MurderWeaponPreset.fireEvent` in `NewAIController.AttackUpdate` (0xac8f00, gunshots through `Toolbox.Shoot` too) and its impact `impactEvent` / `impactEventBody` in `DamageColliderController.ProcessHit` (0x6c0b20); the damage collider is made in `AttackUpdate`. A client's citizens have no AI, so neither runs there. `CitizenAnimationEvents.MeleeAttackTrigger` is an empty function, `Citizen/Player.RecieveDamage` and `TakeDamageRecoil` play nothing.
+- `Net/SoundSync.cs`: a postfix on `AudioController.PlayWorldOneShot` sends every one-shot of those events (11 `punchHit*` + `fireEvent` / `impactEvent` / `impactEventBody` of every weapon preset): event name, position, volume. The receiver plays it at that place without an actor (so no citizen blames anybody for it), within 60 m. Client → host → other clients. At most 30 a second; not held for a loading client.
+- A citizen hitting a player: `ProcessHit` plays `impactEventPlayer` in 2D when the hit actor has `isPlayer`. The message names the player whose body was hit and that player gets the 2D sound as well.
+- Limits: on the host that 2D "you were hit" sound also plays when a citizen hits the client's body (its `isPlayer` is set); not removed. Swing sounds without an impact, footsteps, voices and everything else are not relayed. Both machines need 0.9.67; an older one ignores the message.
+- The hook sits on a function that is also called from inside animation events (`MeleeAttack`). If the game dies on a punch: put `SoundSync` into `BepInEx/sodcoop_skip_patches`.
+- `SodCoop.csproj` references `FMODUnity.dll` (the return type); `lib/refs` regenerated.
+
 ## 0.9.66: a partner whose body was a sleeping citizen gets up and dressed (protocol v49, untested in game)
 
 - Seen (host, 0.9.65): the joining client showed as a man in underwear lying in the air at standing height; it was gone after the client lay down in a bed and got up. Host log: `body outfit at possess: current=bed`, the borrowed citizen was asleep.

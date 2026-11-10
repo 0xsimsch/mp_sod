@@ -21,6 +21,7 @@ public static class ExtraWire
     public const byte Drag = 53;        // DragSync (42 + 1 … 52 are Protocol's)
     public const byte Map = 55;         // MapSync (54 is Protocol's WorldLoaded)
     public const byte Prints = 56;      // PrintSync (hidden fingerprints and footprints)
+    public const byte Sound = 57;       // SoundSync (fight sounds)
 
     public static byte[] Write(byte type, byte kind, Action<BinaryWriter> body)
     {
@@ -68,6 +69,7 @@ public static class ExtraWire
                 case Drag: DragSync.OnPacket(s, from, fromPlayer, data); break;
                 case Map: MapSync.OnPacket(s, from, fromPlayer, data); break;
                 case Prints: PrintSync.OnPacket(s, from, fromPlayer, data); break;
+                case Sound: SoundSync.OnPacket(s, from, fromPlayer, data); break;
             }
         }
         catch (Exception e) { Plugin.Event($"EXTRA message {type} failed: {e.Message}"); }

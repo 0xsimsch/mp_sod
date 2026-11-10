@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.66";
+    public const string ModVersion = "0.9.67";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -237,7 +237,7 @@ public sealed class NetSession : IDisposable
             // Hand pausing back to the game (a client does this in ResetClientWorld): leaving from the Esc menu
             // while a client still played left play = true under an open pause menu.
             TimeSync.Reset();
-            DragSync.Reset(); PrintSync.Reset();
+            DragSync.Reset(); PrintSync.Reset(); SoundSync.Reset();
             StatusSync.Reset();
         }
         else
@@ -746,7 +746,7 @@ public sealed class NetSession : IDisposable
             case MsgType.MurderRecord when Role == SessionRole.Client: MurderSync.Apply(Protocol.ReadMurderRecord(data)); break;
             case (MsgType)ExtraWire.Objective: case (MsgType)ExtraWire.CaseResolve:
             case (MsgType)ExtraWire.Status: case (MsgType)ExtraWire.Notice: case (MsgType)ExtraWire.Drag: case (MsgType)ExtraWire.Map:
-            case (MsgType)ExtraWire.Prints:
+            case (MsgType)ExtraWire.Prints: case (MsgType)ExtraWire.Sound:
                 ExtraWire.OnPacket(this, from, Role == SessionRole.Host && _playerOf.TryGetValue(from, out var xp) ? xp : (PlayerId?)null, (byte)type.Value, data);
                 break;
             case MsgType.CitizenEvent when Role == SessionRole.Client: CitizenEventSync.OnEvent(data); break;
@@ -1313,7 +1313,7 @@ public sealed class NetSession : IDisposable
         foreach (var id in new List<PlayerId>(_clientBodies)) DropRemoteBody(id, why);
         Puppet.NpcPuppets.ReleaseAll();
         TimeSync.Reset();
-        DragSync.Reset(); PrintSync.Reset();
+        DragSync.Reset(); PrintSync.Reset(); SoundSync.Reset();
         StatusSync.Reset();
         SnapshotSync.ForgetLoaded(); // a new welcome from this host may bring a new snapshot: load it
     }
@@ -1438,7 +1438,7 @@ public sealed class NetSession : IDisposable
     static bool HoldDuringLoad(byte[] data)
     {
         var t = Protocol.PeekType(data);
-        return t is not (MsgType.Welcome or MsgType.Reject or MsgType.SnapshotChunk or MsgType.Ping or MsgType.TimeSync or MsgType.Bye or null);
+        return t is not (MsgType.Welcome or MsgType.Reject or MsgType.SnapshotChunk or MsgType.Ping or MsgType.TimeSync or MsgType.Bye or (MsgType)ExtraWire.Sound or null); // a sound from 30 s ago is no use
     }
 
     // The save's contents are taken some frames before the capture task reports done (and the hold queue starts): a
@@ -1530,5 +1530,5 @@ public sealed class NetSession : IDisposable
         $"{Role} on {_transport.Name}" +
         (_lobby != null ? $" lobby={_lobby.LobbyId}" : "") + SteamStatus() +
         (Role == SessionRole.Client ? $" welcomed={_welcomed} rejected={_rejected} bodies={_clientBodies.Count}" : $" clients={_playerOf.Count}") +
-        $" snapshot[{SnapshotSync.LastStatus}] in={PacketsIn} out={PacketsOut} npcPosesSent={NpcPosesSent} npcDriven={Puppet.NpcPuppets.Count} npcReceived={Puppet.NpcPuppets.Received} doors sent={DoorSync.Sent} applied={DoorSync.Applied} resynced={DoorSync.Resynced} nearestDoor[{NearestDoor()}] {CaseSync.Describe()} cit ev={CitizenEventSync.EventsSent}/{CitizenEventSync.EventsApplied} st={CitizenEventSync.StatesSent}/{CitizenEventSync.StatesApplied} world sent={WorldSync.Sent} applied={WorldSync.Applied} lift sent={ElevatorSync.Sent} applied={ElevatorSync.Applied} gadget sent={GadgetSync.Sent} applied={GadgetSync.Applied} blood sent={BloodSync.Sent} applied={BloodSync.Applied} removed={BloodSync.RemovedLocal} news {NewsSync.Sent}/{NewsSync.Applied} phone sent={PhoneSync.Sent} applied={PhoneSync.Applied} dialog sent={DialogSync.Sent} applied={DialogSync.Applied} jobs sent={JobSync.Sent} applied={JobSync.Applied} acceptRequests={JobSync.AcceptRequests} items sent={ItemSync.Sent} applied={ItemSync.Applied} missed={ItemSync.Missed} cases sent={CaseRecordSync.Sent} applied={CaseRecordSync.Applied} murders sent={MurderSync.Sent} applied={MurderSync.Applied} drag sent={DragSync.Sent} applied={DragSync.Applied} {PrintSync.Status()} forensics sent={ForensicSync.Sent} applied={ForensicSync.Applied} deaths sent={DeathSync.Sent} applied={DeathSync.Applied} spawns sent={SpawnSync.Sent} applied={SpawnSync.Applied} failed={SpawnSync.Failed} presets[{SpawnSync.SamplePresets()}] worldAssignID={Interactable.worldAssignID}";
+        $" snapshot[{SnapshotSync.LastStatus}] in={PacketsIn} out={PacketsOut} npcPosesSent={NpcPosesSent} npcDriven={Puppet.NpcPuppets.Count} npcReceived={Puppet.NpcPuppets.Received} doors sent={DoorSync.Sent} applied={DoorSync.Applied} resynced={DoorSync.Resynced} nearestDoor[{NearestDoor()}] {CaseSync.Describe()} cit ev={CitizenEventSync.EventsSent}/{CitizenEventSync.EventsApplied} st={CitizenEventSync.StatesSent}/{CitizenEventSync.StatesApplied} world sent={WorldSync.Sent} applied={WorldSync.Applied} lift sent={ElevatorSync.Sent} applied={ElevatorSync.Applied} gadget sent={GadgetSync.Sent} applied={GadgetSync.Applied} blood sent={BloodSync.Sent} applied={BloodSync.Applied} removed={BloodSync.RemovedLocal} news {NewsSync.Sent}/{NewsSync.Applied} phone sent={PhoneSync.Sent} applied={PhoneSync.Applied} dialog sent={DialogSync.Sent} applied={DialogSync.Applied} jobs sent={JobSync.Sent} applied={JobSync.Applied} acceptRequests={JobSync.AcceptRequests} items sent={ItemSync.Sent} applied={ItemSync.Applied} missed={ItemSync.Missed} cases sent={CaseRecordSync.Sent} applied={CaseRecordSync.Applied} murders sent={MurderSync.Sent} applied={MurderSync.Applied} drag sent={DragSync.Sent} applied={DragSync.Applied} {PrintSync.Status()} {SoundSync.Status()} forensics sent={ForensicSync.Sent} applied={ForensicSync.Applied} deaths sent={DeathSync.Sent} applied={DeathSync.Applied} spawns sent={SpawnSync.Sent} applied={SpawnSync.Applied} failed={SpawnSync.Failed} presets[{SpawnSync.SamplePresets()}] worldAssignID={Interactable.worldAssignID}";
 }
