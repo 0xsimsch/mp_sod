@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.58";
+    public const string ModVersion = "0.9.59";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -549,6 +549,7 @@ public sealed class NetSession : IDisposable
 
     static int _seatLoggedFor = -1, _seatYawFor = -1;
     static float _seatYaw;
+    static Vector3? _seatPos;
 
     /// <summary>
     /// Where and which way a citizen would sit or lie on the furniture the player is locked into: the usage point (the
@@ -566,24 +567,34 @@ public sealed class NetSession : IDisposable
         {
             seat = InteractionController.Instance != null ? InteractionController.Instance.lockedInInteraction : null;
             int id = seat != null ? seat.id : 0;
-            var up = seat?.usagePoint;
             Vector3? use = null, look = null;
             string note = null;
-            if (up != null)
-            {
-                var u = up.GetUsageWorldPosition(new Vector3(feet.X, feet.Y, feet.Z), p);
-                float dy = u.y - feet.Y, dxz = new Vector2(u.x - feet.X, u.z - feet.Z).magnitude;
-                if (Mathf.Abs(dy) > 1.2f || dxz > 1f) note = "too far, kept the seat surface";
-                else { use = u; pos = new Vec3(u.x, u.y, u.z); }
-                var d = up.worldLookAtPoint - u;
-                d.y = 0f;
-                if (use.HasValue && d.sqrMagnitude > 0.01f && d.sqrMagnitude < 100f) look = up.worldLookAtPoint;
-            }
             if (id != _seatYawFor)
             {
+                // Decided once, on the first seated pose, while the player still stands next to the furniture. Getting
+                // into bed then moves the capsule onto the mattress, over a metre from the usage point, and a per-pose
+                // distance check fell back to the capsule (seen 0.9.58: partner 0.7 m up and shifted along the bed).
                 _seatYawFor = id;
-                _seatYaw = look.HasValue ? Mathf.Atan2(look.Value.x - pos.X, look.Value.z - pos.Z) * Mathf.Rad2Deg : yaw;
+                _seatPos = null;
+                var up = seat?.usagePoint;
+                if (up != null)
+                {
+                    var u = up.GetUsageWorldPosition(new Vector3(feet.X, feet.Y, feet.Z), p);
+                    float dy = u.y - feet.Y, dxz = new Vector2(u.x - feet.X, u.z - feet.Z).magnitude;
+                    if (Mathf.Abs(dy) > 1.2f || dxz > 2.5f) note = "too far, kept the seat surface";
+                    else
+                    {
+                        _seatPos = u;
+                        var d = up.worldLookAtPoint - u;
+                        d.y = 0f;
+                        if (d.sqrMagnitude > 0.01f && d.sqrMagnitude < 100f) look = up.worldLookAtPoint;
+                    }
+                }
+                _seatYaw = look.HasValue ? Mathf.Atan2(look.Value.x - _seatPos.Value.x, look.Value.z - _seatPos.Value.z) * Mathf.Rad2Deg : yaw;
+                _seatLoggedFor = -1; // log this decision
             }
+            use = _seatPos;
+            if (use.HasValue) pos = new Vec3(use.Value.x, use.Value.y, use.Value.z);
             yaw = _seatYaw;
             LogSeat(p, seat, feet, use, look, yaw, note);
         }

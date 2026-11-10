@@ -18,6 +18,10 @@
     the mouse-turned body yaw. Now: usage point position, yaw from its look-at point (else frozen at sit-down).
   - tested 0.9.55: lying still floats above the bed (hospital bed; its usage point is 0.35 m above the floor).
   - 0.9.56: BEDDIAG log lines measure where the game puts real citizens in beds vs. the partner's body (fix pending data).
+  - tested 0.9.58: needs ~half a body length toward the foot end. BEDDIAG: citizens in bed stand exactly on the usage
+    point (0.11 m above the floor); the partner was 0.7 m up and 1.3 m off it - once the lie-down moved the capsule onto
+    the mattress, the per-pose 1 m check rejected the usage point and sent the capsule. 0.9.59: the seat pose is decided
+    once on entry (still standing by the furniture) and kept. Untested.
 
 * - when sitting down. sitting animation is played and then it turns into laying in a floating position above the chair
   - 0.9.54: sit/lie was decided by eye height above the capsule, which is on the seat once seated (<0.7 m → "lying").
@@ -30,6 +34,8 @@
   - 0.9.57: the borrowed citizen's own state wasn't cleared: UpdateMovementSpeed feeds the animator drunk ← Human.drunk
     and sobering up runs in the disabled AI, so a drunk donor stays hunched/stumbling. Now drunk is zeroed (restored on
     release), and paused animation / cuffs / ragdoll / combat are reset; "donor animation state" logs what it had. Untested.
+
+- player needs half a playerdistance of offset to the feet end of the bed
 
 unclear:
 
