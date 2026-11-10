@@ -19,6 +19,10 @@
     (AnimatePhysics runs on the throttled physics tick), speed back up unless the game flagged it paused, and
     enabled back on. New CheckFrozenPose watchdog: an arm bone still for 1 s while the body walks logs the whole
     animator state (FREEZE line in sodcoop.log) and rebinds via the game's ForceUpdateAnimationSate.
+  - tested 0.9.60: the head no longer spins.
+  - 0.9.63: found in the game code: Actor.SetModelParentVisibility sets the animator's culling mode on every show/hide
+    of a citizen (no pose while "not seen"), which undid the 0.9.60 pin until the next 0.5 s guard. The pin now runs
+    every frame. Untested.
 - on the case board for the client the needle indicator is optically in unpinned state but in reality its pinned after a new pin was created.
 
 * - when lying in bed one floats above the bed and rotating the mouse still rotates the person horizontally. the height offset is like 2x the height of the bed.

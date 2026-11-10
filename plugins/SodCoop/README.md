@@ -77,6 +77,11 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.63: partner's body keeps animating (untested in game)
+
+- **Cause found in the game code:** `Actor.SetModelParentVisibility` sets the citizen animator's culling mode on every show/hide (1 = no transforms while not seen when shown, 2 = stopped when hidden). Unity then decides "seen" from renderers that can be LOD-switched or replaced by an outfit reload, so a drawn body stops posing.
+- **Animator:** `RemotePlayerBody.LateApply` pins `AlwaysAnimate` every frame (was: only in the 0.5 s guard, which left a window after each show/hide).
+
 ## 0.9.62: open items from the audit and SYNC_GAPS (protocol v48, untested in game)
 
 - **Hand-in (G1):** a client's murder/story hand-in is blocked locally and submitted on the host (`CaseResolve` kind 4); the host's record brings "submitted" and the result back. Side-job hand-ins go through the submit fact.

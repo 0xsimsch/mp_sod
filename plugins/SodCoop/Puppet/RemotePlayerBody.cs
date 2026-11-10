@@ -500,6 +500,11 @@ public sealed class RemotePlayerBody
                 var animator = Human.animationController != null ? Human.animationController.mainAnimator : null;
                 if (neck != null && animator != null && animator.enabled)
                 {
+                    // The game sets the animator to "no pose while not seen" on every show/hide of a citizen
+                    // (Actor.SetModelParentVisibility: cullingMode 1 shown, 2 hidden), and Unity then judges "seen"
+                    // by renderers that may be LOD-switched or replaced by an outfit reload: the body is drawn, the
+                    // walk freezes. The 0.5 s guard left a window after each show/hide, so pin it every frame.
+                    if (animator.cullingMode != AnimatorCullingMode.AlwaysAnimate) animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                     var body = Human.transform;
                     float yaw = Mathf.Clamp(Mathf.DeltaAngle(body.eulerAngles.y, _shownYaw), -70f, 70f);
                     float pitch = Mathf.Clamp(_shownPitch, -45f, 45f);
