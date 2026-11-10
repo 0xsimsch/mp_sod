@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.52";
+    public const string ModVersion = "0.9.53";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -458,7 +458,14 @@ public sealed class NetSession : IDisposable
         var items = FirstPersonItemController.Instance;
         if (items != null && items.flashlight) msg.Flags |= PoseFlags.PlayerFlashlight;
         msg.Flags |= SeatedFlags(p, msg.Position.Y);
-        if ((msg.Flags & PoseFlags.PlayerSitting) != 0) msg.Position = SeatPosition(p, msg.Position);
+        if ((msg.Flags & (PoseFlags.PlayerSitting | PoseFlags.PlayerLying)) != 0) SeatPose(p, ref msg.Position, ref msg.Yaw);
+        if ((msg.Flags & PoseFlags.PlayerLying) != 0)
+        {
+            msg.Flags &= ~(PoseFlags.PlayerHiding | PoseFlags.PlayerInVent);
+            var bed = InteractionController.Instance != null ? InteractionController.Instance.lockedInInteraction : null;
+            if (bed?.preset != null && bed.preset.bedRightSide) msg.Flags |= PoseFlags.PlayerBedRight;
+        }
+        else _seatYawFor = _seatLoggedFor = -1;
         msg.Activity = ActivityOf(p);
         msg.Swings = Patches.SwingCapture.Swings;
         msg.Blocks = Patches.SwingCapture.Blocks;
@@ -519,50 +526,73 @@ public sealed class NetSession : IDisposable
             if (ic == null || ic.lockedInInteraction == null || p.isCrouched) return 0;
             var cam = p.cam != null && p.cam.cam != null ? p.cam.cam.transform : null;
             if (cam == null) return 0;
+            // The game keeps the last transition (BedEnter, ChairEnter, SitDown, SitDownHunched, SitFloor) until the next
+            // one, so trust its name while we're locked in. Eye height is only a fallback: the capsule is moved up onto
+            // the mattress or seat, so eyes-above-capsule says "lying" on a chair and flips between sit and lie in bed.
+            string transition = p.currentTransition != null ? p.currentTransition.name : "";
+            if (transition.StartsWith("Bed") || transition.StartsWith("Lie")) return PoseFlags.PlayerLying;
+            if (transition.StartsWith("Sit") || transition.StartsWith("Chair")) return PoseFlags.PlayerSitting;
             float eyes = cam.position.y - feetY;
             if (eyes < 0.7f) return PoseFlags.PlayerLying;
-            // Sitting down moves the player up onto the seat, so the eyes can stay at standing height above the
-            // capsule (seen: the body stood on the chair). The game keeps the last transition (ChairEnter, SitDown,
-            // SitDownHunched, SitFloor) until the next one, so trust its name while we're locked into the seat.
-            string transition = p.currentTransition != null ? p.currentTransition.name : "";
-            if (transition.StartsWith("Sit") || transition.StartsWith("Chair") || eyes < 1.35f) return PoseFlags.PlayerSitting;
+            if (eyes < 1.35f) return PoseFlags.PlayerSitting;
         }
         catch { /* best effort */ }
         return 0;
     }
 
 
-    static int _seatLoggedFor = -1;
+    static int _seatLoggedFor = -1, _seatYawFor = -1;
+    static float _seatYaw;
 
     /// <summary>
-    /// Where a citizen would sit on the seat the player is locked into: the seat's usage point (the spot the AI walks
-    /// to and sits at), which matches the citizen sitting animation on that object (sofas, stools and bar chairs
-    /// differ). Falls back to the player's capsule bottom (the seat surface) when there's no usage point or it is
-    /// implausibly far away. Logged once per seat.
+    /// Where and which way a citizen would sit or lie on the furniture the player is locked into: the usage point (the
+    /// spot the AI walks to; the citizen sitting and get-into-bed animations lift the body onto the seat/mattress
+    /// themselves, so the capsule bottom — already on top of it — would float the body by the furniture's height again),
+    /// facing the usage point's look-at point. Mouse look turns the player's body yaw, but a seated body must stay put:
+    /// without a look-at point the yaw is frozen at what it was when the player sat down. Falls back to the capsule
+    /// bottom when there's no usage point or it is implausibly far away. Logged once per seat.
     /// </summary>
-    static Vec3 SeatPosition(Player p, Vec3 feet)
+    static void SeatPose(Player p, ref Vec3 pos, ref float yaw)
     {
+        var feet = pos;
+        Interactable seat = null;
         try
         {
-            var seat = InteractionController.Instance != null ? InteractionController.Instance.lockedInInteraction : null;
+            seat = InteractionController.Instance != null ? InteractionController.Instance.lockedInInteraction : null;
+            int id = seat != null ? seat.id : 0;
             var up = seat?.usagePoint;
-            if (up == null) { LogSeat(p, seat, feet, null); return feet; }
-            var use = up.GetUsageWorldPosition(new Vector3(feet.X, feet.Y, feet.Z), p);
-            float dy = use.y - feet.Y, dxz = new Vector2(use.x - feet.X, use.z - feet.Z).magnitude;
-            if (Mathf.Abs(dy) > 1.2f || dxz > 1f) { LogSeat(p, seat, feet, use, "too far, kept the seat surface"); return feet; }
-            LogSeat(p, seat, feet, use);
-            return new Vec3(use.x, use.y, use.z);
+            Vector3? use = null, look = null;
+            string note = null;
+            if (up != null)
+            {
+                var u = up.GetUsageWorldPosition(new Vector3(feet.X, feet.Y, feet.Z), p);
+                float dy = u.y - feet.Y, dxz = new Vector2(u.x - feet.X, u.z - feet.Z).magnitude;
+                if (Mathf.Abs(dy) > 1.2f || dxz > 1f) note = "too far, kept the seat surface";
+                else { use = u; pos = new Vec3(u.x, u.y, u.z); }
+                var d = up.worldLookAtPoint - u;
+                d.y = 0f;
+                if (use.HasValue && d.sqrMagnitude > 0.01f && d.sqrMagnitude < 100f) look = up.worldLookAtPoint;
+            }
+            if (id != _seatYawFor)
+            {
+                _seatYawFor = id;
+                _seatYaw = look.HasValue ? Mathf.Atan2(look.Value.x - pos.X, look.Value.z - pos.Z) * Mathf.Rad2Deg : yaw;
+            }
+            yaw = _seatYaw;
+            LogSeat(p, seat, feet, use, look, yaw, note);
         }
-        catch (Exception e) { Plugin.Event($"POSE seat position failed: {e.Message}"); return feet; }
+        catch (Exception e) { Plugin.Event($"POSE seat pose failed: {e.Message}"); pos = feet; }
     }
 
-    static void LogSeat(Player p, Interactable seat, Vec3 feet, Vector3? use, string note = null)
+    static void LogSeat(Player p, Interactable seat, Vec3 feet, Vector3? use, Vector3? look, float yaw, string note)
     {
         int id = seat != null ? seat.id : 0;
         if (id == _seatLoggedFor) return;
         _seatLoggedFor = id;
         Plugin.Event($"POSE seated on {(seat?.preset != null ? seat.preset.name : "?")} #{id}: transition={(p.currentTransition != null ? p.currentTransition.name : "-")} " +
-                     $"capsule y={feet.Y:F2} usage point={(use.HasValue ? $"({use.Value.x:F2}, {use.Value.y:F2}, {use.Value.z:F2})" : "none")}{(note != null ? " — " + note : "")}");
+                     $"capsule y={feet.Y:F2} usage point={(use.HasValue ? $"({use.Value.x:F2}, {use.Value.y:F2}, {use.Value.z:F2})" : "none")} " +
+                     $"yaw={yaw:F0} ({(look.HasValue ? "look-at point" : "frozen player yaw")}, furniture yaw " +
+                     $"{(seat?.controller != null ? seat.controller.transform.eulerAngles.y.ToString("F0") : "?")}){(note != null ? " — " + note : "")}");
     }
 
     /// <summary>What the local player is doing, for the partner's view (first match wins).</summary>

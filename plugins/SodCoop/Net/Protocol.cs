@@ -161,6 +161,9 @@ public enum PoseFlags : byte
     PlayerSitting = 8,
     /// <summary>Players only: lying down (bed).</summary>
     PlayerLying = 128,
+    /// <summary>Players only, with <see cref="PlayerLying"/> (can't be in a vent then): the bed's right side
+    /// (<c>InteractablePreset.bedRightSide</c>, what citizens get into bed with).</summary>
+    PlayerBedRight = 32,
 }
 
 public struct PoseMsg

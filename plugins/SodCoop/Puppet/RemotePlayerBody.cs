@@ -196,7 +196,8 @@ public sealed class RemotePlayerBody
     public void SetPlayerFlags(Net.PoseFlags f)
     {
         if (Human == null || Human.WasCollected) return;
-        bool hiding = (f & Net.PoseFlags.PlayerHiding) != 0, vent = (f & Net.PoseFlags.PlayerInVent) != 0;
+        bool lying = (f & Net.PoseFlags.PlayerLying) != 0; // while lying, the hiding/vent bits mean other things
+        bool hiding = !lying && (f & Net.PoseFlags.PlayerHiding) != 0, vent = !lying && (f & Net.PoseFlags.PlayerInVent) != 0;
         Human.isHiding = hiding;
         Human.inAirVent = vent;
         if (Hidden != (hiding || vent))
@@ -207,10 +208,11 @@ public sealed class RemotePlayerBody
         }
         _flashlightOn = (f & Net.PoseFlags.PlayerFlashlight) != 0;
         _sitting = (f & Net.PoseFlags.PlayerSitting) != 0;
-        _lying = (f & Net.PoseFlags.PlayerLying) != 0;
+        _lying = lying;
+        _bedRight = lying && (f & Net.PoseFlags.PlayerBedRight) != 0;
     }
 
-    bool _sitting, _lying, _sitShown, _lieShown;
+    bool _sitting, _lying, _bedRight, _sitShown, _lieShown;
     Net.PlayerActivity _activity;
     CitizenAnimationController.ArmsBoolSate _armsShown = (CitizenAnimationController.ArmsBoolSate)255;
     bool _phoneShown;
@@ -370,7 +372,7 @@ public sealed class RemotePlayerBody
         if (lie != _lieShown)
         {
             Human.isInBed = lie;
-            anim.SetInBed(lie, false, false, false);
+            anim.SetInBed(lie, false, _bedRight, false);
             _lieShown = lie;
         }
     }
