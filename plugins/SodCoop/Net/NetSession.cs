@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.53";
+    public const string ModVersion = "0.9.54";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -332,7 +332,7 @@ public sealed class NetSession : IDisposable
         }
         if ((Role == SessionRole.Host && _playerOf.Count > 0) || (Role == SessionRole.Client && _welcomed))
         {
-            CaseRecordSync.Flush(now, (json, active) => Broadcast(Protocol.CaseRecord(json, active), true));
+            CaseRecordSync.Flush(now, (json, active, fresh) => Broadcast(Protocol.CaseRecord(json, active, fresh), true));
             JobSync.Flush(now, (type, json) => Broadcast(Protocol.JobRecord(type, json), true));
             ObjectiveSync.Tick(now);
             CaseSync.FlushNotices();
@@ -750,8 +750,8 @@ public sealed class NetSession : IDisposable
                     if (!_playerOf.ContainsKey(from)) break;
                     foreach (var peer in _playerOf.Keys) if (peer != from) SendTo(peer, data, true);
                 }
-                var (caseJson, caseActive) = Protocol.ReadCaseRecord(data);
-                CaseRecordSync.Apply(caseJson, caseActive && Role == SessionRole.Client); // only the host picks the active case
+                var (caseJson, caseActive, caseFresh) = Protocol.ReadCaseRecord(data);
+                CaseRecordSync.Apply(caseJson, caseActive && Role == SessionRole.Client, caseFresh); // only the host picks the active case
                 break;
             case MsgType.SnapshotChunk when Role == SessionRole.Client: SnapshotSync.OnChunk(Protocol.ReadSnapshotChunk(data)); break;
             case MsgType.TalkRequest when Role == SessionRole.Host:
@@ -814,7 +814,7 @@ public sealed class NetSession : IDisposable
             HostName = LocalName(),
         }), true);
         MurderSync.SendAll(json => SendTo(from, Protocol.MurderRecord(json), true));
-        CaseRecordSync.SendAll((json, active) => SendTo(from, Protocol.CaseRecord(json, active), true));
+        CaseRecordSync.SendAll((json, active, fresh) => SendTo(from, Protocol.CaseRecord(json, active, fresh), true));
         SendTo(from, Protocol.BodyMap(BodyMapNow()), true);
         NewsSync.SendTo(data => SendTo(from, data, true));
         if (isNewPlayer) SnapshotSync.RequestFor(chunk => SendTo(from, chunk, true), () => _transport.PendingReliableBytes(from), () => BeginLoadQueue(from));
