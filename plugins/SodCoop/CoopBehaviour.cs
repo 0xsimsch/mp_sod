@@ -379,8 +379,7 @@ public class CoopBehaviour : MonoBehaviour
             Plugin.Event($"Ctrl+Home: session with self: {_steamTest.Describe(_steamTest.Self, out _)}; relay={_steamTest.RelayStatus}");
             try
             {
-                using var lobby = new SteamLobby();
-                Plugin.Event($"Ctrl+Home: friends hosting right now: {lobby.FriendLobbies(requestMissing: false).Count}; " +
+                Plugin.Event($"Ctrl+Home: friends hosting right now: {SteamLobby.FriendLobbies(requestMissing: false).Count}; " +
                              $"command-line lobby: {SteamLobby.LobbyFromCommandLine()}; parse test: {SteamLobby.ParseLobbyArg("+connect_lobby 109775241234567890")}");
             }
             catch (Exception e) { Plugin.Event($"Ctrl+Home: friend search failed: {e.Message}"); }

@@ -15,7 +15,7 @@ The host is authoritative: it runs the city, citizens, murders and side jobs. Cl
 - **Citizens:** posture, KO, damage in both directions, speech, attacks, awareness. The host simulates the citizens near every player.
 - **World:** doors, items (pick-up, move, throw, delete), switches, weather, windows, alarms, cameras, breakers, elevators, phones, blood, newspapers.
 - **Per player:** money and inventory are kept per player, keyed by SteamID.
-- **UI:** "Host Co-op" / "Join Friend" buttons in the main menu, a connection overlay, and a third-person view of your partner while you recover from a KO.
+- **UI:** "Host Co-op" button and a list of friends who are hosting ("Join <name>") in the main menu, a connection overlay, and a third-person view of your partner while you recover from a KO.
 
 Story mode isn't supported (a warning is shown). Apartments and decor, witness memory and dialog memory are still per machine. The list of what's done and what's open is in [`analysis/SYNC_PRIORITIES.md`](analysis/SYNC_PRIORITIES.md).
 
@@ -25,7 +25,7 @@ You need BepInEx 6 (IL2CPP, bleeding edge) in the game folder, plus `SodCoop.dll
 
 On Linux/Proton, set the launch option `WINEDLLOVERRIDES="winhttp=n,b" %command%`.
 
-Short version: the host loads a sandbox save and clicks **Host Co-op** (or presses F11). The friend clicks **Join Friend** in the main menu, or uses "Join game" in the Steam friends list. Both players need the same mod version.
+Short version: the host loads a sandbox save and clicks **Host Co-op** (or presses F11). The friend sees the host in the main menu and clicks **Join <name>**, or uses "Join game" in the Steam friends list. Both players need the same mod version.
 
 ## Build
 

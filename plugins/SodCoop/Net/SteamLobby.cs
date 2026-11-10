@@ -157,11 +157,15 @@ public sealed class SteamLobby : IDisposable
 
     /// <summary>
     /// Friends currently in this game with a lobby: from their rich presence (<c>connect</c>, set by a SodCoop host)
-    /// or, if that hasn't arrived yet, the lobby Steam reports in their game info.
+    /// or, if that hasn't arrived yet, the lobby Steam reports in their game info. Needs no lobby of our own
+    /// (the menu's friend list polls it without a session).
     /// </summary>
-    public List<(ulong friend, string name, ulong lobby)> FriendLobbies(bool requestMissing)
+    public static List<(ulong friend, string name, ulong lobby)> FriendLobbies(bool requestMissing)
     {
         var result = new List<(ulong, string, ulong)>();
+        var _friends = SteamNative.SteamAPI_SteamFriends_v017();
+        var _utils = SteamNative.SteamAPI_SteamUtils_v010();
+        if (_friends == IntPtr.Zero || _utils == IntPtr.Zero) return result; // Steam not up (yet)
         uint appId = SteamNative.SteamAPI_ISteamUtils_GetAppID(_utils);
         var info = Marshal.AllocHGlobal(32);
         try

@@ -57,7 +57,7 @@ Summary: P __  F __  ! __  ~ __  - __     Defects filed: DEFECT-__ …
 | ID | Step | Expected | Check | Res |
 |---|---|---|---|---|
 | CONN-1 | Host: load world, F11 | Lobby created, overlay flips to HOST; F11 refuses without a loaded world | log: `NET lobby … entered` / refusal | |
-| CONN-2 | Client at main menu: **Join Friend** button | Finds the hosting friend within ~20 s and starts the join | log: `NET found … friend lobby(s)` | |
+| CONN-2 | Client at main menu: **Join <name>** button (one per hosting friend; "No Friends Hosting" otherwise) | The host appears within a few seconds of hosting; a click starts the join | log: `MENU friends hosting: …`, `MENU join …` | |
 | CONN-3 | Same via F11 on client | Identical result | — | |
 | CONN-4 | Friend list → "Join game" (client game **running**) | Join starts in the running game | log: `NET lobby … joined`, `STEAM … → lobby …` | |
 | CONN-5 | "Join game" with client game **stopped** | Steam cold-starts the game; it auto-joins once the menu is up | log: `joining Steam lobby … from the command line` | |

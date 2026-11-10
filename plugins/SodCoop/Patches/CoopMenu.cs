@@ -8,7 +8,8 @@ namespace SodCoop.Patches;
 
 /// <summary>
 /// Co-op entries in the game's own main/Esc menu, made from copies of its "Load Game" button (same look, sounds and
-/// highlight): Host Co-op / Join Friend when no session runs; Invite Friend (host) and Leave Co-op during one.
+/// highlight): Host Co-op and one "Join &lt;name&gt;" entry per friend who is hosting right now when no session runs
+/// (a greyed-out "No Friends Hosting" if there is none); Invite Friend (host) and Leave Co-op during one.
 /// The copies get a fresh click event (the original's persistent "open Load Game" call must not come along) and lose
 /// <c>MenuAutoTextController</c>, which would put the localized "Load Game" back on them.
 /// </summary>
@@ -64,21 +65,26 @@ static class CoopMenu
         CaptureBars(menu, template); // before our copies go in: the row then holds exactly the game's buttons
         int index = template.transform.GetSiblingIndex();
         Add(template, ++index, "Host Co-op", () => !InSession, () => Core.World.Ready, Host);
-        Add(template, ++index, "Join Friend", () => !InSession, () => true, Join);
+        for (int i = 0; i < MaxFriendRows; i++)
+        {
+            int slot = i;
+            _friendRows[slot] = Add(template, ++index, "Join Friend " + slot, () => !InSession && slot < _hosting.Count, () => true, () => Join(slot));
+        }
+        Add(template, ++index, "No Friends Hosting", () => !InSession && _hosting.Count == 0, () => false, () => { });
         Add(template, ++index, "Invite Friend", () => IsHost, () => true, () => NetSession.Current?.OpenInvite());
         Add(template, ++index, "Leave Co-op", () => InSession, () => true, Leave);
         _builtFor = menu.GetInstanceID();
         Plugin.Event($"MENU added {_entries.Count} co-op buttons");
     }
 
-    static void Add(ButtonController template, int siblingIndex, string label, Func<bool> visible, Func<bool> enabled, Action onClick)
+    static Entry Add(ButtonController template, int siblingIndex, string label, Func<bool> visible, Func<bool> enabled, Action onClick)
     {
         var go = UnityEngine.Object.Instantiate(template.gameObject, template.transform.parent);
         go.name = "SodCoop " + label;
         go.transform.SetSiblingIndex(siblingIndex);
         foreach (var auto in go.GetComponentsInChildren<MenuAutoTextController>(true)) UnityEngine.Object.Destroy(auto);
         var bc = go.GetComponent<ButtonController>();
-        if (bc == null) { UnityEngine.Object.Destroy(go); return; }
+        if (bc == null) { UnityEngine.Object.Destroy(go); return null; }
         if (bc.button != null)
         {
             bc.button.onClick = new UnityEngine.UI.Button.ButtonClickedEvent();
@@ -87,6 +93,52 @@ static class CoopMenu
         var entry = new Entry { Button = bc, Label = label, Visible = visible, Enabled = enabled };
         SetLabel(entry);
         _entries.Add(entry);
+        return entry;
+    }
+
+    // --- friends who are hosting: one "Join <name>" row each, polled from Steam while the menu shows them
+    const int MaxFriendRows = 5;   // more would push the column off the screen
+    const int MaxNameLength = 16;  // the button is about as wide as "Invite Friend"
+    const float FriendPollSeconds = 2f;
+    static readonly Entry[] _friendRows = new Entry[MaxFriendRows];
+    static List<(ulong friend, string name, ulong lobby)> _hosting = new();
+    static float _nextFriendPoll;
+    static string _hostingLogged = "";
+    static bool _friendPollFailed;
+
+    /// <summary>Rich presence of friends arrives asynchronously (and is asked for here), so the list fills in and
+    /// follows hosts that open or close a game while the menu is up.</summary>
+    static void PollFriends()
+    {
+        if (InSession || _row == null || !_row.gameObject.activeInHierarchy) return; // rows not on screen
+        if (Time.unscaledTime < _nextFriendPoll) return;
+        _nextFriendPoll = Time.unscaledTime + FriendPollSeconds;
+        try
+        {
+            var found = SteamLobby.FriendLobbies(requestMissing: true);
+            found.Sort((a, b) => { int c = string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase); return c != 0 ? c : a.friend.CompareTo(b.friend); });
+            _hosting = found;
+        }
+        catch (Exception e)
+        {
+            _hosting = new();
+            if (!_friendPollFailed) { _friendPollFailed = true; Plugin.Event($"MENU friend list failed: {e.Message}"); }
+        }
+        for (int i = 0; i < MaxFriendRows; i++)
+        {
+            if (_friendRows[i] == null || i >= _hosting.Count) continue;
+            var name = _hosting[i].name;
+            if (string.IsNullOrWhiteSpace(name)) name = "Friend";
+            if (name.Length > MaxNameLength) name = name.Substring(0, MaxNameLength - 1).TrimEnd() + "…";
+            _friendRows[i].Label = "Join " + name;
+        }
+        var summary = string.Join(", ", _hosting.ConvertAll(f => $"{f.name} ({f.friend}) lobby {f.lobby}"));
+        if (summary != _hostingLogged)
+        {
+            _hostingLogged = summary;
+            Plugin.Event(_hosting.Count == 0 ? "MENU no friend is hosting" : $"MENU friends hosting: {summary}" +
+                         (_hosting.Count > MaxFriendRows ? $" (showing the first {MaxFriendRows})" : ""));
+        }
     }
 
     /// <summary>
@@ -102,6 +154,7 @@ static class CoopMenu
     /// <summary>Show the entries that fit the session state (called when the menu opens and twice a second).</summary>
     public static void Refresh()
     {
+        PollFriends();
         foreach (var e in _entries)
         {
             if (e.Button == null || e.Button.WasCollected) continue;
@@ -313,11 +366,16 @@ static class CoopMenu
         Refresh();
     }
 
-    static void Join()
+    static void Join(int slot)
     {
+        if (slot >= _hosting.Count) return; // the friend closed their game between the last poll and the click
+        var (friend, name, lobby) = _hosting[slot];
+        Plugin.Event($"MENU join {name} ({friend}) lobby {lobby}");
         NetConfig.Mode.Value = NetConfig.NetMode.JoinSteam;
-        NetConfig.JoinLobby.Value = 0;
+        NetConfig.JoinLobby.Value = lobby;
         CoopBehaviour.StartOrInvite();
+        NetConfig.JoinLobby.Value = 0; // not kept: a later F11 in join mode looks for a hosting friend again
+        if (InSession) SessionOverlay.Flash($"joining {name}…");
         Refresh();
     }
 

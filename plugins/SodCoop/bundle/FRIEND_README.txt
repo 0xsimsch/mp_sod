@@ -19,8 +19,10 @@ Install
 Join the host
 -------------
 The host (your friend with the world) starts the session first. Then any of these:
- a) Easiest: in the main menu click "Join Friend" (or press F11).
-    The mod finds the friend who is hosting and joins them.
+ a) Easiest: the main menu lists every friend who is hosting as
+    "Join <name>". Click the one you want (or press F11 to join the
+    first one found). "No Friends Hosting" means nobody is hosting yet;
+    the list updates by itself.
  b) Right click the host in your Steam friends list > "Join game", or accept the host's Steam invite.
     Works whether the game is running or not (if not, Steam starts it and it joins once the main menu is up).
 

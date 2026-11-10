@@ -77,6 +77,11 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.64: friend list in the menu (untested in game)
+
+- **Menu:** "Join Friend" is replaced by one **Join <name>** button per friend who is hosting right now (up to 5, sorted by name; names over 16 characters are cut). With none, a greyed-out "No Friends Hosting" stands there instead. The list is polled from Steam every 2 s while the menu is up (`CoopMenu.PollFriends`, `SteamLobby.FriendLobbies` is now static), so a friend who starts hosting appears without reopening the menu. A click joins that friend's lobby directly; `JoinLobby` in the config is not kept.
+- F11 in `JoinSteam` mode is unchanged: it still joins the first hosting friend it finds.
+
 ## 0.9.63: partner's body keeps animating (untested in game)
 
 - **Cause found in the game code:** `Actor.SetModelParentVisibility` sets the citizen animator's culling mode on every show/hide (1 = no transforms while not seen when shown, 2 = stopped when hidden). Unity then decides "seen" from renderers that can be LOD-switched or replaced by an outfit reload, so a drawn body stops posing.
