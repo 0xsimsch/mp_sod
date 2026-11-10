@@ -42,7 +42,8 @@ public enum MsgType : byte
     Death = 22,
     /// <summary>host → clients: a murder record (JSON, the game's own serialized form) was created or changed state.</summary>
     MurderRecord = 23,
-    /// <summary>host → clients: a case (JSON, the game's save form) and whether it's the active one.</summary>
+    /// <summary>host → clients: a case (JSON, the game's save form), whether it's the active one, and whether
+    /// it just started (clients show the game's "New Murder Case" title for a fresh murder case they don't have).</summary>
     CaseRecord = 24,
     /// <summary>host → joining client: one chunk of a save-state snapshot (B1 mid-game join).</summary>
     SnapshotChunk = 25,
@@ -393,7 +394,7 @@ public struct ForensicMsg
 public static class Protocol
 {
     /// <summary>Bump on any wire change. Hosts reject other versions in the handshake.</summary>
-    public const ushort Version = 44;
+    public const ushort Version = 45;
     const ushort Magic = 0x4D53; // "SM"
 
     public static byte[] Hello(HelloMsg m) => Write(MsgType.Hello, w =>
@@ -601,18 +602,20 @@ public static class Protocol
 
     public static string ReadMurderRecord(byte[] d) => Read(d, r => Encoding.UTF8.GetString(r.ReadBytes(r.ReadInt32())));
 
-    public static byte[] CaseRecord(string json, bool active) => Write(MsgType.CaseRecord, w =>
+    public static byte[] CaseRecord(string json, bool active, bool fresh) => Write(MsgType.CaseRecord, w =>
     {
         w.Write(active);
+        w.Write(fresh);
         var b = Encoding.UTF8.GetBytes(json ?? "");
         w.Write(b.Length);
         w.Write(b);
     });
 
-    public static (string json, bool active) ReadCaseRecord(byte[] d) => Read(d, r =>
+    public static (string json, bool active, bool fresh) ReadCaseRecord(byte[] d) => Read(d, r =>
     {
         bool active = r.ReadBoolean();
-        return (Encoding.UTF8.GetString(r.ReadBytes(r.ReadInt32())), active);
+        bool fresh = r.ReadBoolean();
+        return (Encoding.UTF8.GetString(r.ReadBytes(r.ReadInt32())), active, fresh);
     });
 
     public static byte[] SnapshotChunk(SnapshotChunkMsg m) => Write(MsgType.SnapshotChunk, w =>

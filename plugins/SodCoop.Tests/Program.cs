@@ -86,8 +86,10 @@ static class Program
         var death = Protocol.ReadDeath(Protocol.Death(new DeathMsg { VictimId = 10, KillerId = -3, MurderId = 77, WeaponId = -1 }));
         Check(death.VictimId == 10 && death.KillerId == -3 && death.MurderId == 77, "Death round trip (player killer encoding)");
 
-        var (cj, ca) = Protocol.ReadCaseRecord(Protocol.CaseRecord(longJson, true));
-        Check(cj == longJson && ca, "CaseRecord round trip");
+        var (cj, ca, cf) = Protocol.ReadCaseRecord(Protocol.CaseRecord(longJson, true, true));
+        Check(cj == longJson && ca && cf, "CaseRecord round trip (active, fresh)");
+        var (cj2, ca2, cf2) = Protocol.ReadCaseRecord(Protocol.CaseRecord(longJson, false, false));
+        Check(cj2 == longJson && !ca2 && !cf2, "CaseRecord round trip (not active, not fresh)");
 
         var chunk = new byte[16384];
         new Random(1).NextBytes(chunk);

@@ -11,8 +11,10 @@ namespace SodCoop.Net;
 /// questions; <c>[Serializable]</c>) go to clients in the game's save form. The client rebuilds them the way
 /// <c>SaveStateController.LoadSaveState</c> does (<c>Objective.Setup(case)</c>, then
 /// <c>CasePanelController.SetActiveCase</c>) and follows the host's active case.
-/// Sent: all cases on Welcome, the case on <c>SetActiveCase</c>, and a case again (debounced) when it gets an
-/// objective. Discoveries inside the case are <see cref="CaseSync"/>'s job.
+/// Sent: all cases on Welcome (not fresh), the case on <c>SetActiveCase</c>, and a case again (debounced) when it
+/// gets an objective (a new murder case goes out fresh: clients who don't have it show the game's big
+/// "New Murder Case" title, which their skipped <c>MurderController.OnVictimDiscovery</c> never shows).
+/// Discoveries inside the case are <see cref="CaseSync"/>'s job.
 /// </summary>
 public static class CaseRecordSync
 {
@@ -30,7 +32,7 @@ public static class CaseRecordSync
 
     static bool IsHost => NetSession.Current?.Role == NetSession.SessionRole.Host;
 
-    public static void SendAll(Action<string, bool> send)
+    public static void SendAll(Action<string, bool, bool> send)
     {
         var panel = CasePanelController.Instance;
         if (panel?.activeCases == null) return;
@@ -38,13 +40,13 @@ public static class CaseRecordSync
         {
             var c = panel.activeCases[i];
             if (c == null) continue;
-            send(JsonUtility.ToJson(c), panel.activeCase != null && panel.activeCase.id == c.id);
+            send(JsonUtility.ToJson(c), panel.activeCase != null && panel.activeCase.id == c.id, false); // pre-existing: no title on join
             Sent++;
         }
     }
 
     /// <summary>Host, per frame: send cases marked dirty once things settle.</summary>
-    public static void Flush(float now, Action<string, bool> send)
+    public static void Flush(float now, Action<string, bool, bool> send)
     {
         if (!IsHost) ApplyDeferred(now);
         if (_dirty.Count == 0 || now < _flushAt) return;
@@ -61,7 +63,7 @@ public static class CaseRecordSync
                     continue;
                 }
                 _lastSent[c.id] = json;
-                send(json, panel.activeCase != null && panel.activeCase.id == c.id);
+                send(json, panel.activeCase != null && panel.activeCase.id == c.id, c.caseType == Case.CaseType.murder);
                 Sent++;
                 if (!IsHost) Plugin.Event($"CASE board edit for {c.id} \"{c.name}\" sent: {c.caseElements?.Count ?? 0} pins");
             }
@@ -193,7 +195,7 @@ public static class CaseRecordSync
     static class ToggleConnection { static void Postfix(Case __instance) => BoardEdited(__instance); }
 
     /// <summary>Client: records held back while the mouse button is down (a board rebuild would cut off a drag).</summary>
-    static readonly Dictionary<int, (string json, bool active, float since)> _deferred = new();
+    static readonly Dictionary<int, (string json, bool active, bool fresh, float since)> _deferred = new();
     const float MaxDefer = 10f;
 
     static bool Dragging()
@@ -208,16 +210,16 @@ public static class CaseRecordSync
         bool dragging = Dragging();
         foreach (var id in new List<int>(_deferred.Keys))
         {
-            var (json, active, since) = _deferred[id];
+            var (json, active, fresh, since) = _deferred[id];
             if (dragging && now - since < MaxDefer) continue;
             _deferred.Remove(id);
-            Apply(json, active, fromQueue: true);
+            Apply(json, active, fresh, fromQueue: true);
         }
     }
 
-    public static void Apply(string json, bool active) => Apply(json, active, false);
+    public static void Apply(string json, bool active, bool fresh) => Apply(json, active, fresh, false);
 
-    static void Apply(string json, bool active, bool fromQueue)
+    static void Apply(string json, bool active, bool fresh, bool fromQueue)
     {
         var panel = CasePanelController.Instance;
         if (panel?.activeCases == null) return;
@@ -227,7 +229,8 @@ public static class CaseRecordSync
             if (id >= 0)
             {
                 float since = _deferred.TryGetValue(id, out var d) ? d.since : Time.unscaledTime;
-                _deferred[id] = (json, active || (_deferred.TryGetValue(id, out var d2) && d2.active), since); // newest record wins
+                _deferred[id] = (json, active || (_deferred.TryGetValue(id, out var d2) && d2.active),
+                    fresh || (_deferred.TryGetValue(id, out var d3) && d3.fresh), since); // newest record wins
                 return;
             }
         }
@@ -243,11 +246,12 @@ public static class CaseRecordSync
             SetupObjectives(c, c.inactiveCurrentObjectives);
             SetupObjectives(c, c.endedObjectives);
 
-            bool wasActive = false;
+            bool wasActive = false, existed = false;
             for (int i = panel.activeCases.Count - 1; i >= 0; i--)
             {
                 var old = panel.activeCases[i];
                 if (old == null || old.id != c.id) continue;
+                existed = true;
                 wasActive |= panel.activeCase != null && panel.activeCase.Pointer == old.Pointer;
                 if (_dirty.Contains(c.id)) KeepLocalBoard(old, c);
                 RetireObjectives(old);
@@ -262,9 +266,26 @@ public static class CaseRecordSync
             }
             Applied++;
             Plugin.Event($"CASE record {c.id} \"{c.name}\" applied: {c.caseElements?.Count ?? 0} pins, {c.currentActiveObjectives?.Count ?? 0} active objectives, active={active} ({json.Length} chars)");
+            if (!IsHost && fresh && !existed && c.caseType == Case.CaseType.murder) ShowNewCaseTitle(c);
         }
         catch (Exception e) { Plugin.Event($"CASE record failed: {e}"); }
         finally { _applying = false; }
+    }
+
+    /// <summary>
+    /// Client: the game's own big "New Murder Case" header text (InterfaceController.NewMurderCaseDisplay, what
+    /// MurderController.OnVictimDiscovery shows there — a client never runs that, CaseIds sends the discovery to the
+    /// host). Run when a fresh murder case lands that we didn't have: the synced murder record carries the victim and
+    /// victim site the display reads.
+    /// </summary>
+    static void ShowNewCaseTitle(Case c)
+    {
+        try
+        {
+            InterfaceController.Instance?.NewMurderCaseDisplay();
+            Plugin.Event($"CASE {c.id} \"{c.name}\": showed the new-murder-case title");
+        }
+        catch (Exception e) { Plugin.Event($"CASE could not show the new-murder-case title: {e.Message}"); }
     }
 
     /// <summary>The case id from a record without parsing the whole case ("id":N in the JSON); -1 if not found.</summary>
