@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.56";
+    public const string ModVersion = "0.9.58";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -91,6 +91,7 @@ public sealed class NetSession : IDisposable
                 byte idle = anim != null ? (byte)anim.idleAnimationState : (byte)0;
                 byte arms = anim != null ? (byte)anim.armsBoolAnimationState : (byte)0;
                 bool ko = c.ai != null && c.ai.ko;
+                if (c.isInBed) Puppet.BedDiag.Citizen(c);
                 var posture = (c.isInBed ? PoseFlags.InBed : 0) | (c.isInLowBed ? PoseFlags.LowBed : 0)
                               | (anim != null && anim.flipToRightAnimation ? PoseFlags.FlipRight : 0) | (c.isAsleep ? PoseFlags.Asleep : 0);
                 int state = idle | (arms << 8) | (ko ? 1 << 16 : 0) | ((int)posture << 17);
@@ -458,7 +459,11 @@ public sealed class NetSession : IDisposable
         var items = FirstPersonItemController.Instance;
         if (items != null && items.flashlight) msg.Flags |= PoseFlags.PlayerFlashlight;
         msg.Flags |= SeatedFlags(p, msg.Position.Y);
-        if ((msg.Flags & (PoseFlags.PlayerSitting | PoseFlags.PlayerLying)) != 0) SeatPose(p, ref msg.Position, ref msg.Yaw);
+        if ((msg.Flags & (PoseFlags.PlayerSitting | PoseFlags.PlayerLying)) != 0)
+        {
+            SeatPose(p, ref msg.Position, ref msg.Yaw);
+            msg.Flags &= ~PoseFlags.Crouched; // sat down from a crouch: the game keeps isCrouched, the body is seated
+        }
         else _seatYawFor = _seatLoggedFor = -1;
         if ((msg.Flags & PoseFlags.PlayerLying) != 0)
         {
@@ -523,7 +528,7 @@ public sealed class NetSession : IDisposable
         try
         {
             var ic = InteractionController.Instance;
-            if (ic == null || ic.lockedInInteraction == null || p.isCrouched) return 0;
+            if (ic == null || ic.lockedInInteraction == null) return 0;
             var cam = p.cam != null && p.cam.cam != null ? p.cam.cam.transform : null;
             if (cam == null) return 0;
             // The game keeps the last transition (BedEnter, ChairEnter, SitDown, SitDownHunched, SitFloor) until the next
@@ -532,6 +537,7 @@ public sealed class NetSession : IDisposable
             string transition = p.currentTransition != null ? p.currentTransition.name : "";
             if (transition.StartsWith("Bed") || transition.StartsWith("Lie")) return PoseFlags.PlayerLying;
             if (transition.StartsWith("Sit") || transition.StartsWith("Chair")) return PoseFlags.PlayerSitting;
+            if (p.isCrouched) return 0; // crouching in some other locked interaction: not seated
             float eyes = cam.position.y - feetY;
             if (eyes < 0.7f) return PoseFlags.PlayerLying;
             if (eyes < 1.35f) return PoseFlags.PlayerSitting;

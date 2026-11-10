@@ -116,6 +116,7 @@ public sealed class RemotePlayerBody
         try
         {
             if (Human.ai != null && Human.ai.enabled && !KnockedOut) Human.ai.enabled = false;
+            if (Human.drunk != 0f) { if (_originalDrunk == 0f) _originalDrunk = Human.drunk; Human.drunk = 0f; } // the player isn't drunk
             // Force it on when near: the body's currentRoom can be stale after we move it, so the room check
             // alone left bodies invisible (two-machine test). Showing one through a wall beats not showing it.
             var cam = Camera.main;
@@ -232,6 +233,7 @@ public sealed class RemotePlayerBody
     }
 
     bool _sitting, _lying, _bedRight, _sitShown, _lieShown;
+    float _lieDiagAt;
     Net.PlayerActivity _activity;
     CitizenAnimationController.ArmsBoolSate _armsShown = (CitizenAnimationController.ArmsBoolSate)255;
     bool _phoneShown;
@@ -393,6 +395,7 @@ public sealed class RemotePlayerBody
             Human.isInBed = lie;
             anim.SetInBed(lie, false, _bedRight, false);
             _lieShown = lie;
+            _lieDiagAt = lie ? Time.time + 3f : 0f; // after the get-into-bed animation
         }
     }
 
@@ -467,6 +470,8 @@ public sealed class RemotePlayerBody
             UpdateFlashlight();
             if (_sitting || _lying || _sitShown || _lieShown) UpdateSeated();
             if (!_sitShown && !_lieShown) UpdateCrouch();
+            else if (_shownScaleY != 1f || _crouchIdleShown) ResetCrouch(); // sat/lay down from a crouch: full size
+            if (_lieShown && _lieDiagAt > 0f && Time.time >= _lieDiagAt) { _lieDiagAt = 0f; BedDiag.Partner(Owner.ToString(), Human); }
             UpdateDrawnWeapon();
             UpdateActivity();
             if (_held == Net.HeldKind.Carried && _heldId >= 0 && !_heldWasThrown &&
@@ -579,6 +584,7 @@ public sealed class RemotePlayerBody
         if (Human == null) return;
         if (KnockedOut) SetKnockedOut(false); // don't leave the citizen in a forced one-hour KO
         Human.isPlayer = _originalIsPlayer;
+        if (_originalDrunk != 0f) Human.drunk = _originalDrunk;
         Human.isTrespassing = Human.illegalAreaActive = Human.illegalActionActive = false;
         Human.trespassingEscalation = 0;
         if (Human.illegalStatus) { Human.illegalStatus = false; Human.SetStealthMode(false); }
@@ -787,5 +793,38 @@ public sealed class RemotePlayerBody
     /// <summary>Move the body to a pose (see <see cref="BodyDriver.Apply"/>).</summary>
     public void Apply(PlayerPose pose) => _driver.Apply(pose);
 
-    void ResetAnimation() => _driver.ResetAnimation();
+    float _originalDrunk;
+
+    /// <summary>
+    /// The donor's own state can leave the animator stuck in a pose the player isn't in (seen: a body hunched over
+    /// the whole session, no walk cycle). <c>UpdateMovementSpeed</c> feeds the animator <c>drunk</c> ← <c>Human.drunk</c>
+    /// every move, and sobering up runs in the (disabled) AI, so a drunk donor stays drunk; a citizen that was
+    /// knocked out or removed from the world can have its animation paused; one in cuffs stays restrained.
+    /// </summary>
+    void ResetAnimation()
+    {
+        _driver.ResetAnimation();
+        var anim = Human.animationController;
+        if (anim == null) return;
+        try
+        {
+            var animator = anim.mainAnimator;
+            Plugin.Event($"{Owner} donor animation state: drunk={Human.drunk:F2} paused={anim.paused} " +
+                         $"restrained={(Human.ai != null && Human.ai.restrained)} ragdoll={(Human.ai != null && Human.ai.isRagdoll)} " +
+                         $"animator={(animator == null ? "none" : $"enabled={animator.enabled} speed={animator.speed:F2}")} " +
+                         $"idle={anim.idleAnimationState} arms={anim.armsBoolAnimationState}");
+            if (Human.drunk != 0f) { _originalDrunk = Human.drunk; Human.drunk = 0f; }
+            if (anim.paused) anim.SetPauseAnimation(false);
+            if (Human.ai != null && Human.ai.restrained) anim.SetRestrained(false);
+            if (!KnockedOut && Human.ai != null && Human.ai.isRagdoll) anim.SetRagdoll(false, false);
+            anim.SetInCombat(false);
+            if (animator != null)
+            {
+                if (!animator.enabled) animator.enabled = true;
+                if (animator.speed < 0.01f) animator.speed = 1f;
+            }
+            anim.UpdateMovementSpeed(); // push drunk = 0 now, not on the next move
+        }
+        catch (System.Exception e) { Plugin.Event($"{Owner} body: animation reset failed: {e.Message}"); }
+    }
 }
