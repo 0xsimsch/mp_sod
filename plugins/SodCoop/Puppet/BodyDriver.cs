@@ -19,7 +19,15 @@ public sealed class BodyDriver
     {
         var anim = Human.animationController;
         if (anim == null) return;
-        if (Human.isInBed) anim.SetInBed(false, false, false, true);
+        // Clear the citizen's own flags too: the game re-applies the bed pose from them whenever the citizen is
+        // shown or unpaused (Actor.SetVisible / SetPauseAnimation -> ForceUpdateAnimationSate -> SetInBed(isInBed…)).
+        Human.isAsleep = false;
+        if (Human.isInBed || Human.isInLowBed)
+        {
+            Human.isInBed = false;
+            Human.isInLowBed = false;
+            anim.SetInBed(false, false, false, true);
+        }
         anim.SetIdleAnimationState(CitizenAnimationController.IdleAnimationState.none);
         anim.SetArmsBoolState(CitizenAnimationController.ArmsBoolSate.none);
     }

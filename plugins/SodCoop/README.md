@@ -77,6 +77,12 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.66: a partner whose body was a sleeping citizen gets up and dressed (protocol v49, untested in game)
+
+- Seen (host, 0.9.65): the joining client showed as a man in underwear lying in the air at standing height; it was gone after the client lay down in a bed and got up. Host log: `body outfit at possess: current=bed`, the borrowed citizen was asleep.
+- Cause: `BodyDriver.ResetAnimation` cleared the animator's `isInBed` but left `Actor.isInBed` set. `CitizenAnimationController.ForceUpdateAnimationSate` (0x488820; called by `Actor.SetVisible` and `SetPauseAnimation`) calls `SetInBed(human.isInBed, human.isInLowBed, …, instant)`, so the first time the body was shown at the player's place the bed pose came back. The bed outfit only changes in the citizen's AI, which is off.
+- Fix: at possess and in the 0.5 s guard, a body whose player isn't lying has `isInBed` / `isInLowBed` / `isAsleep` cleared and `SetInBed(false)`; an `undressed` / `bed` / `underwear` outfit is replaced by `casual`. Both are logged ("got it up", "dressed it"). `PickDonor` prefers a citizen that is up and dressed.
+
 ## 0.9.65: hidden prints synced, players leave no footprints, body drag hardened (protocol v49, untested in game)
 
 - **Fingerprints (G4, `PrintSync`):** the hidden prints on objects (`Interactable.df`: owner, time, life and the random seed that places the print) were made on each machine by itself. The host's are now sent (batched every 0.5 s); a client adds no citizen prints of its own and sends its own player's touches to the host. Prints keep the owner id as stored, so a player's prints show as "the player's" on both machines.

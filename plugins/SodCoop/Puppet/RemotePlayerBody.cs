@@ -44,6 +44,7 @@ public sealed class RemotePlayerBody
         var citizens = CityData.Instance?.citizenDirectory;
         var murder = MurderController.Instance;
         if (citizens == null) return null;
+        Citizen fallback = null;
         for (int i = 0; i < citizens.Count; i++)
         {
             var c = citizens[i];
@@ -52,9 +53,15 @@ public sealed class RemotePlayerBody
             if (murder != null && ((murder.currentMurderer != null && murder.currentMurderer.Pointer == c.Pointer) ||
                                    (murder.currentVictim != null && murder.currentVictim.Pointer == c.Pointer))) continue;
             if (Vector3.Distance(c.transform.position, avoidNear) < 30f) continue;
+            // Prefer somebody up and dressed; a sleeper is woken and dressed in Possess if there is nobody else.
+            if (c.isAsleep || c.isInBed || (c.outfitController != null && c.outfitController.currentOutfit >= ClothesPreset.OutfitCategory.undressed))
+            {
+                fallback ??= c;
+                continue;
+            }
             return c;
         }
-        return null;
+        return fallback;
     }
 
     public static RemotePlayerBody Possess(NetPlayer owner, Citizen donor)
@@ -76,6 +83,7 @@ public sealed class RemotePlayerBody
         }
 
         body.ResetAnimation();
+        body.OutOfBedAndDressed();
         body.DropCitizenProps();
         body.ArmWith(null);
         owner.RemoteBody = body;
@@ -111,6 +119,35 @@ public sealed class RemotePlayerBody
         catch (System.Exception e) { Plugin.Event($"{Owner} body: could not drop hand props: {e.Message}"); }
     }
 
+    /// <summary>
+    /// A donor that was asleep stays a sleeper: its bed outfit only changes in its (disabled) AI, and the game puts
+    /// the bed pose back from <c>Actor.isInBed</c> every time the citizen is shown (seen 0.9.65: the partner as a
+    /// lying man in underwear, floating at standing height). The body is in bed only when its player lies down.
+    /// </summary>
+    void OutOfBedAndDressed()
+    {
+        if (Human == null || Human.WasCollected || KnockedOut) return;
+        try
+        {
+            if (!_lying && !_lieShown && (Human.isInBed || Human.isInLowBed || Human.isAsleep))
+            {
+                Plugin.Event($"{Owner} body: the citizen was in bed (inBed={Human.isInBed} low={Human.isInLowBed} asleep={Human.isAsleep}): got it up");
+                Human.isAsleep = false;
+                Human.isInBed = false;
+                Human.isInLowBed = false;
+                Human.animationController?.SetInBed(false, false, false, true);
+            }
+            var oc = Human.outfitController;
+            if (oc != null && oc.currentOutfit >= ClothesPreset.OutfitCategory.undressed)
+            {
+                var was = oc.currentOutfit;
+                oc.SetCurrentOutfit(ClothesPreset.OutfitCategory.casual, true, false, true);
+                Plugin.Event($"{Owner} body: the citizen wore its {was} outfit: dressed it ({OutfitStatus()})");
+            }
+        }
+        catch (System.Exception e) { Plugin.Event($"{Owner} body: could not get the citizen out of bed: {e.Message}"); }
+    }
+
     void KeepShown()
     {
         try
@@ -123,7 +160,7 @@ public sealed class RemotePlayerBody
             float dist = cam != null ? Vector3.Distance(cam.transform.position, Human.transform.position) : 0f;
             if (Hidden) { if (Human.visible) Human.SetVisible(false, true); }
             else if (!Human.visible && dist < 80f) Human.SetVisible(true, true);
-            if (!KnockedOut) KeepAnimated();
+            if (!KnockedOut) { OutOfBedAndDressed(); KeepAnimated(); }
             _marker.Ensure(Human, Owner.Id.Value);
             DropCitizenProps();
             if (!_combatShown && !_weaponDrawn) ArmWith(null); // a drawn weapon keeps its own preset (stance, swing)
