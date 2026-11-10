@@ -182,15 +182,23 @@ public static class CitizenEventSync
         public string Action;      // AIActionPreset name or ""
         public bool Right, Left;   // the action's props are spawned in that hand on the host
         public byte Drunk;         // 0..255 of Human.drunk clamped to 0..1 (the stagger in the walk animation)
+        public bool Carry;         // animator 'carryingItem' (a box, a bag, an umbrella-like carry pose)
+        public byte CarryType;     // animator 'carryItem'
+        public byte CombatArms;    // animator 'combatArmsOverride' (the weapon's arm pose, set by SetCurrentWeapon)
 
         public bool SameAs(in State o) => Reaction == o.Reaction && TargetPlayer == o.TargetPlayer && Math.Abs(Alertness - o.Alertness) < 26 &&
                                           Outfit == o.Outfit && Combat == o.Combat && Weapon == o.Weapon && Action == o.Action && Right == o.Right && Left == o.Left &&
-                                          Math.Abs(Drunk - o.Drunk) < 26 && (Drunk == 0) == (o.Drunk == 0);
+                                          Math.Abs(Drunk - o.Drunk) < 26 && (Drunk == 0) == (o.Drunk == 0) &&
+                                          Carry == o.Carry && CarryType == o.CarryType && CombatArms == o.CombatArms;
     }
 
     const float StateInterval = 0.2f;
     static float _nextStates;
     static readonly Dictionary<(PlayerId, int), State> _lastSent = new();
+
+    static readonly int CarryingItemId = Animator.StringToHash("carryingItem");
+    static readonly int CarryItemId = Animator.StringToHash("carryItem");
+    static readonly int CombatArmsId = Animator.StringToHash("combatArmsOverride");
 
     static State Capture(Human c)
     {
@@ -212,6 +220,14 @@ public static class CitizenEventSync
         }
         if (c.outfitController != null) s.Outfit = (byte)c.outfitController.currentOutfit;
         s.Drunk = (byte)Mathf.RoundToInt(Mathf.Clamp01(c.drunk) * 255f);
+        // The controller keeps no fields for these; the animator parameters are the state.
+        var animator = c.animationController != null ? c.animationController.mainAnimator : null;
+        if (animator != null && animator.isInitialized)
+        {
+            s.Carry = animator.GetBool(CarryingItemId);
+            s.CarryType = (byte)Mathf.Clamp(animator.GetInteger(CarryItemId), 0, 255);
+            s.CombatArms = (byte)Mathf.Clamp(animator.GetInteger(CombatArmsId), 0, 255);
+        }
         return s;
     }
 
@@ -403,6 +419,14 @@ public static class CitizenEventSync
         // Drunk: UpdateMovementSpeed feeds the animator from Human.drunk; sobering up runs in the (disabled) AI.
         c.drunk = s.Drunk / 255f;
 
+        var anim = c.animationController;
+        if (anim != null && (!had || old.Carry != s.Carry || old.CarryType != s.CarryType))
+        {
+            if (s.Carry) anim.SetCarryItemType(s.CarryType);
+            anim.SetCarryingItem(s.Carry);
+        }
+        if (anim != null && (!had || old.CombatArms != s.CombatArms)) anim.SetCombatArmsOverride(s.CombatArms);
+
         // Reaction toward a player: the game's own indicator over the citizen's head ("!" / "?" / spotted).
         if (ai != null && (!had || old.Reaction != s.Reaction || old.TargetPlayer != s.TargetPlayer))
         {
@@ -507,8 +531,8 @@ public static class CitizenEventSync
     static void WriteState(BinaryWriter w, int id, State s)
     {
         w.Write(id); w.Write(s.Reaction); w.Write(s.TargetPlayer); w.Write(s.Alertness); w.Write(s.Outfit);
-        w.Write((byte)((s.Combat ? 1 : 0) | (s.Right ? 2 : 0) | (s.Left ? 4 : 0)));
-        Str(w, s.Weapon); Str(w, s.Action); w.Write(s.Drunk);
+        w.Write((byte)((s.Combat ? 1 : 0) | (s.Right ? 2 : 0) | (s.Left ? 4 : 0) | (s.Carry ? 8 : 0)));
+        Str(w, s.Weapon); Str(w, s.Action); w.Write(s.Drunk); w.Write(s.CarryType); w.Write(s.CombatArms);
     }
 
     static (int, State) ReadState(BinaryReader r)
@@ -516,8 +540,8 @@ public static class CitizenEventSync
         int id = r.ReadInt32();
         var s = new State { Reaction = r.ReadByte(), TargetPlayer = r.ReadSByte(), Alertness = r.ReadByte(), Outfit = r.ReadByte() };
         byte f = r.ReadByte();
-        s.Combat = (f & 1) != 0; s.Right = (f & 2) != 0; s.Left = (f & 4) != 0;
-        s.Weapon = Str(r); s.Action = Str(r); s.Drunk = r.ReadByte();
+        s.Combat = (f & 1) != 0; s.Right = (f & 2) != 0; s.Left = (f & 4) != 0; s.Carry = (f & 8) != 0;
+        s.Weapon = Str(r); s.Action = Str(r); s.Drunk = r.ReadByte(); s.CarryType = r.ReadByte(); s.CombatArms = r.ReadByte();
         return (id, s);
     }
 

@@ -86,15 +86,24 @@ public static class DoorSync
     static DoorSync() => World.Reloaded += Reset;
 
     /// <summary>Called from the patches after a door changed locally.</summary>
-    static void OnLocalChange(NewDoor door, Actor actor)
+    static void OnLocalChange(NewDoor door, Actor actor, bool lockAction = false, bool lockChanged = false)
     {
         var s = NetSession.Current;
         if (s == null || _applying || !World.Ready || !TryKey(door, out var key)) return;
 
         var by = PlayerRegistry.OwnerOf(actor);
-        if (s.Role == NetSession.SessionRole.Client && (by == null || !by.IsLocal)) return; // clients only report themselves
+        if (s.Role == NetSession.SessionRole.Client && (by == null || !by.IsLocal))
+        {
+            // Clients only report themselves. A lock change without an actor right at our player is ours too: a
+            // picked lock or a keypad reaches SetLocked through the lock strength / the door's interactable, with
+            // no actor. (Until the host stopped taking the lock from open/close messages, those unlocks only got
+            // there with the next open.)
+            if (!(lockAction && lockChanged && actor == null && NearLocalPlayer(door))) return;
+            by = PlayerRegistry.Local;
+            if (by == null) return;
+        }
 
-        var msg = new DoorStateMsg { DoorKey = key, Ajar = door.ajar, Locked = door.isLocked, ByPlayer = by != null ? by.Id.Value : (byte)255 };
+        var msg = new DoorStateMsg { DoorKey = key, Ajar = door.ajar, Locked = door.isLocked, ByPlayer = by != null ? by.Id.Value : (byte)255, LockAction = lockAction };
         if (s.SendDoor(msg, door.transform.position, InterestRadius)) Sent++;
         // Host: a client between InterestRadius and LeaveRadius didn't get this change but still has the door in
         // its "already sent" set, so coming back never resynced it. Forget the door for everyone: the approach
@@ -131,10 +140,55 @@ public static class DoorSync
     [HarmonyPatch(typeof(NewDoor), nameof(NewDoor.SetLocked))]
     static class LockPatch
     {
-        static void Postfix(NewDoor __instance, Actor actor)
+        static void Prefix(NewDoor __instance, out bool __state) => __state = __instance.isLocked;
+
+        static void Postfix(NewDoor __instance, Actor actor, bool __state)
         {
-            try { OnLocalChange(__instance, actor); }
+            try { OnLocalChange(__instance, actor, true, __state != __instance.isLocked); }
             catch (Exception e) { Plugin.Event($"door sync failed: {e.Message}"); }
         }
+    }
+
+    /// <summary>A lock change with no actor counts as our player's within this distance of the door.</summary>
+    const float OwnLockReach = 4f;
+
+    static bool NearLocalPlayer(NewDoor door) =>
+        Player.Instance != null && Vector3.Distance(Player.Instance.transform.position, door.transform.position) <= OwnLockReach;
+
+    public static int Refused { get; private set; }
+
+    /// <summary>
+    /// Host: a client's door message before it is applied and passed on. A lock/unlock action is taken as sent. A plain
+    /// open/close carries the client's copy of the lock, which can be stale (its own citizens lock and unlock doors,
+    /// changes outside its range): the host's lock stays. Opening a door that is locked here is refused.
+    /// <paramref name="correct"/>: tell that client the door's real state (<see cref="StateOf"/>) afterwards.
+    /// </summary>
+    public static bool HostAccepts(ref DoorStateMsg m, out bool correct)
+    {
+        correct = false;
+        if (m.LockAction || !World.Ready) return true;
+        var dict = CityData.Instance?.doorDictionary;
+        if (dict == null || !dict.TryGetValue(m.DoorKey, out var door) || door == null) return true;
+        if (door.isLocked == m.Locked) return true;
+        correct = true;
+        Refused++;
+        if (door.isLocked)
+        {
+            Plugin.Event($"DOOR {m.DoorKey}: P{m.ByPlayer} moved it (ajar {m.Ajar:F2}) but it is locked here; refused, its state sent back");
+            return false;
+        }
+        Plugin.Event($"DOOR {m.DoorKey}: P{m.ByPlayer} has it locked, it is unlocked here; kept unlocked, its state sent back");
+        m.Locked = false;
+        return true;
+    }
+
+    /// <summary>Host: a door's state as it is here.</summary>
+    public static bool StateOf(int doorKey, out DoorStateMsg state)
+    {
+        state = default;
+        var dict = World.Ready ? CityData.Instance?.doorDictionary : null;
+        if (dict == null || !dict.TryGetValue(doorKey, out var door) || door == null) return false;
+        state = new DoorStateMsg { DoorKey = doorKey, Ajar = door.ajar, Locked = door.isLocked, ByPlayer = 255 };
+        return true;
     }
 }

@@ -252,4 +252,25 @@ public static class DialogSync
 
     [HarmonyPatch(typeof(ActionController), nameof(ActionController.Inspect))]
     static class NoHostInspect { static bool Prefix() => !_applying; }
+
+    // What a conversation hands "the player": on the host that is the host's own player, but the conversation was the
+    // client's, which already got these on its own machine.
+
+    [HarmonyPatch(typeof(GameplayController), nameof(GameplayController.AddGuestPass), typeof(NewAddress), typeof(float))]
+    static class NoHostGuestPass { static bool Prefix() => !_applying; }
+
+    [HarmonyPatch(typeof(GameplayController), nameof(GameplayController.AddGuestPass), typeof(NewAddress), typeof(UnityEngine.Vector2))]
+    static class NoHostGuestPassDirect { static bool Prefix() => !_applying; }
+
+    [HarmonyPatch(typeof(GameplayController), nameof(GameplayController.AddPasscode))]
+    static class NoHostPasscode { static bool Prefix() => !_applying; }
+
+    [HarmonyPatch(typeof(GameplayController), nameof(GameplayController.AddOrMergePhoneNumberData))]
+    static class NoHostPhoneNumber { static bool Prefix() => !_applying; }
+
+    [HarmonyPatch(typeof(GameplayController), nameof(GameplayController.AddSocialCredit))]
+    static class NoHostSocialCredit { static bool Prefix() => !_applying; }
+
+    [HarmonyPatch(typeof(GameplayController), nameof(GameplayController.AddLockpicks))]
+    static class NoHostLockpicks { static bool Prefix() => !_applying; }
 }

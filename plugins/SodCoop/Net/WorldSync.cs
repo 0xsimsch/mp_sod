@@ -29,6 +29,12 @@ public enum WorldEventKind : byte
     Breaker = 8,
     /// <summary>Client → host: the client's own player set off an alarm. B1 = is address (else building), I0 = id, I2 = floor (-999 none).</summary>
     AlarmRequest = 9,
+    /// <summary>Host → clients: Human.RemoveFromWorld (arrested killer, cover-up, missing person). I0 = humanID, B0 = removed.</summary>
+    CitizenRemoved = 10,
+    /// <summary>Client → host: the client's player set the alarm target on a security terminal. B1 = is address (else building), I0 = id, I1 = AlarmTargetMode.</summary>
+    TargetModeRequest = 11,
+    /// <summary>Client → host: the client's player switched an alarm off on a security terminal. B1 = is address (else building), I0 = id, I2 = floor (-999 none).</summary>
+    AlarmOffRequest = 12,
 }
 
 public struct WorldEventMsg
@@ -112,7 +118,7 @@ public static class WorldSync
     static Dictionary<int, NewBuilding> _buildings;
     static Dictionary<int, Interactable> _interactables;
 
-    static WorldSync() => World.Reloaded += () => { _doorKey = null; _buildings = null; _interactables = null; _lastWeather = default; _isBreaker.Clear(); };
+    static WorldSync() => World.Reloaded += () => { _doorKey = null; _buildings = null; _interactables = null; _lastWeather = default; _isBreaker.Clear(); _farSwitches.Clear(); };
 
     internal static bool TryDoorKey(NewDoor door, out int key)
     {
@@ -252,6 +258,14 @@ public static class WorldSync
                     _applying = false; // the host raises it for real: its postfix broadcasts the state to everyone
                     RaiseForClient(m);
                     break;
+                case WorldEventKind.TargetModeRequest when IsHost:
+                case WorldEventKind.AlarmOffRequest when IsHost:
+                    _applying = false; // done for real here: the postfixes broadcast the resulting state to everyone
+                    TerminalForClient(m);
+                    break;
+                case WorldEventKind.CitizenRemoved when IsClient:
+                    ApplyRemoved(m);
+                    break;
                 case WorldEventKind.Breaker:
                 {
                     var it = FindInteractable(m.I0);
@@ -274,6 +288,7 @@ public static class WorldSync
     public static void HostTick(float now)
     {
         if (IsHost && World.Ready && now >= _nextWindows) { _nextWindows = now + WindowScan; ScanBrokenWindows(); }
+        if (IsHost && World.Ready && now >= _nextFarSwitches) { _nextFarSwitches = now + FarSwitchScan; FlushFarSwitches(); }
         if (!IsHost || !World.Ready || now < _nextWeather) return;
         _nextWeather = now + WeatherResend;
         var sd = SessionData.Instance;
@@ -318,15 +333,50 @@ public static class WorldSync
 
     static bool SwitchPrefix(Interactable it, Actor interactor)
     {
-        // Client: our local citizens don't flip switches near our player; the host's state arrives instead.
+        // Client: our local citizens don't flip switches; the host's state arrives instead: at once near a player,
+        // otherwise when one of us comes near (FlushFarSwitches). Until 0.9.61 only switches near our player were
+        // kept from them, and a room entered later showed our own citizens' lights, not the host's.
         if (_applying || !IsClient || !World.Ready || it == null || interactor == null || interactor.isPlayer || IsDoor(it)) return true;
-        return !NearLocalPlayer(it.wPos);
+        return false;
     }
 
     static void SwitchPostfix(Interactable it, InteractablePreset.Switch which, bool val, Actor interactor)
     {
-        if (_applying || !IsHost || !World.Ready || it == null || !NonPlayer(interactor) || IsDoor(it) || !NearRemotePlayer(it.wPos)) return;
+        if (_applying || !IsHost || !World.Ready || it == null || !NonPlayer(interactor) || IsDoor(it)) return;
+        var key = (it.id, (int)which);
+        if (!NearRemotePlayer(it.wPos))
+        {
+            // Nobody there to see it now: remembered, and sent when a client's body comes within range.
+            if (_farSwitches.Count < FarSwitchMax || _farSwitches.ContainsKey(key)) _farSwitches[key] = (it.wPos, val);
+            return;
+        }
+        _farSwitches.Remove(key);
         Send(new WorldEventMsg { Kind = WorldEventKind.Switch, ByPlayer = NoPlayer, I0 = it.id, I1 = (int)which, B0 = val });
+    }
+
+    // Host: switches citizens or timers flipped away from every client (lights, TVs, appliances), by (interactable id,
+    // switch): where and the last value. Sent like a live change once a client's body is within InterestRadius.
+    const int FarSwitchMax = 20000;
+    const float FarSwitchScan = 1f;
+    static float _nextFarSwitches;
+    static readonly Dictionary<(int id, int which), (Vector3 pos, bool val)> _farSwitches = new();
+    public static int FarSwitchesSent { get; private set; }
+
+    static void FlushFarSwitches()
+    {
+        if (_farSwitches.Count == 0) return;
+        List<(int id, int which)> near = null;
+        foreach (var kv in _farSwitches)
+            if (NearRemotePlayer(kv.Value.pos)) (near ??= new List<(int id, int which)>()).Add(kv.Key);
+        if (near == null) return;
+        foreach (var k in near)
+        {
+            bool val = _farSwitches[k].val;
+            _farSwitches.Remove(k);
+            Send(new WorldEventMsg { Kind = WorldEventKind.Switch, ByPlayer = NoPlayer, I0 = k.id, I1 = k.which, B0 = val });
+        }
+        FarSwitchesSent += near.Count;
+        Plugin.Event($"WORLD {near.Count} switch(es) changed while no client was near: sent now that one is");
     }
 
     [HarmonyPatch(typeof(Interactable), nameof(Interactable.SetSwitchState))]
@@ -465,6 +515,94 @@ public static class WorldSync
         Plugin.Event($"WORLD P{m.ByPlayer} set off the {(m.B1 ? "address" : "building")} {m.I0} alarm: raised here");
     }
 
+    // --- security terminals (SYNC_GAPS G11): a client's own "alarm off" and "alarm target" on a security computer
+    // were simply dropped here (HostDecides), so the host's cameras and sentries kept targeting it. They are asked of
+    // the host now; its resulting alarm state comes back as WorldEventKind.Alarm like any other.
+
+    /// <summary>The frame in which our player pressed a button of the security app (SetTargetMode/SetAlarm run inside it).</summary>
+    static int _terminalFrame = -1;
+    static bool InTerminal => _terminalFrame >= 0 && _terminalFrame == UnityEngine.Time.frameCount;
+
+    [HarmonyPatch(typeof(SecurityApp), nameof(SecurityApp.AlarmTargetSelection))]
+    static class TerminalTarget
+    {
+        static void Prefix() => _terminalFrame = UnityEngine.Time.frameCount;
+        static void Postfix() => _terminalFrame = -1;
+    }
+
+    [HarmonyPatch(typeof(SecurityApp), nameof(SecurityApp.SetAlarmActiveButton))]
+    static class TerminalAlarm
+    {
+        static void Prefix() => _terminalFrame = UnityEngine.Time.frameCount;
+        static void Postfix() => _terminalFrame = -1;
+    }
+
+    /// <summary>Client, inside a security app button: send the request instead; true = sent (skip the local change).</summary>
+    static bool ForwardTerminal(WorldEventKind kind, bool isAddress, int id, int mode, int floor)
+    {
+        if (_applying || !IsClient || !World.Ready || !InTerminal) return false;
+        Session?.SendWorld(WorldProtocol.Write(new WorldEventMsg
+        {
+            Kind = kind, ByPlayer = PlayerRegistry.Local?.Id.Value ?? NoPlayer, B1 = isAddress, I0 = id, I1 = mode, I2 = floor,
+        }));
+        Sent++;
+        Plugin.Event($"WORLD security terminal: {(kind == WorldEventKind.AlarmOffRequest ? "alarm off" : $"target mode {(NewBuilding.AlarmTargetMode)mode}")} for {(isAddress ? "address" : "building")} {id}: asking the host");
+        return true;
+    }
+
+    /// <summary>Host: a client's security-terminal change, done for real here.</summary>
+    static void TerminalForClient(WorldEventMsg m)
+    {
+        bool off = m.Kind == WorldEventKind.AlarmOffRequest;
+        var mode = (NewBuilding.AlarmTargetMode)m.I1;
+        if (m.B1)
+        {
+            if (CityData.Instance?.addressDictionary == null || !CityData.Instance.addressDictionary.TryGetValue(m.I0, out var a) || a == null) return;
+            if (off) { if (a.alarmActive) a.SetAlarm(false, null); }
+            else if (a.targetMode != mode) a.SetTargetMode(mode, true);
+        }
+        else
+        {
+            var b = Building(m.I0);
+            if (b == null) return;
+            if (off)
+            {
+                NewFloor floor = null;
+                if (m.I2 != -999 && b.floors != null) b.floors.TryGetValue(m.I2, out floor);
+                if (b.alarmActive) b.SetAlarm(false, null, floor);
+            }
+            else if (b.targetMode != mode) b.SetTargetMode(mode, true);
+        }
+        Plugin.Event($"WORLD P{m.ByPlayer}'s security terminal: {(off ? "alarm off" : $"target mode {mode}")} for {(m.B1 ? "address" : "building")} {m.I0}: done here");
+    }
+
+    // --- citizens taken out of the world (SYNC_GAPS G5): the arrested killer, a cover-up, a missing person. Only the
+    // host's game does it (clients skip the resolve effects), so the killer kept walking around on clients.
+
+    [HarmonyPatch(typeof(Human), nameof(Human.RemoveFromWorld))]
+    static class Removed
+    {
+        static void Prefix(Human __instance, out bool __state) => __state = __instance != null && __instance.removedFromWorld;
+
+        static void Postfix(Human __instance, bool val, bool __state)
+        {
+            if (_applying || !IsHost || !World.Ready || __instance == null || __instance.isPlayer) return;
+            if (__instance.removedFromWorld != val || __state == val) return; // didn't happen (blocked), or no change
+            Send(new WorldEventMsg { Kind = WorldEventKind.CitizenRemoved, ByPlayer = NoPlayer, I0 = __instance.humanID, B0 = val });
+            Plugin.Event($"WORLD citizen {__instance.humanID} {(val ? "removed from" : "back in")} the world: told the clients");
+        }
+    }
+
+    static void ApplyRemoved(WorldEventMsg m)
+    {
+        var dict = CityData.Instance?.citizenDictionary;
+        if (dict == null || !dict.TryGetValue(m.I0, out var h) || h == null || h.isPlayer || h.removedFromWorld == m.B0) return;
+        if (PlayerRegistry.IsRemoteBody(h)) return; // a player's body here: never taken away
+        Puppet.NpcPuppets.Forget(m.I0); // the host's poses for it stop; its AI is the game's to switch off
+        h.RemoveFromWorld(m.B0);
+        Plugin.Event($"WORLD citizen {m.I0} {(m.B0 ? "removed from" : "back in")} the world (the host's)");
+    }
+
     [HarmonyPatch(typeof(NewBuilding), nameof(NewBuilding.SetAlarm))]
     static class BuildingAlarm
     {
@@ -482,7 +620,8 @@ public static class WorldSync
     [HarmonyPatch(typeof(NewBuilding), nameof(NewBuilding.SetTargetMode))]
     static class BuildingMode
     {
-        static bool Prefix() => HostDecides();
+        static bool Prefix(NewBuilding __instance, NewBuilding.AlarmTargetMode newMode) =>
+            !ForwardTerminal(WorldEventKind.TargetModeRequest, false, __instance.buildingID, (int)newMode, -999) && HostDecides();
         static void Postfix(NewBuilding __instance) =>
             SendAlarm(false, __instance.buildingID, __instance.alarmActive, __instance.targetMode, __instance.alarmTimer, -999);
     }
@@ -495,6 +634,7 @@ public static class WorldSync
             var me = Player.Instance;
             if (ForwardOwnAlarm(newVal, target, true, __instance.id, -999,
                     () => me != null && me.currentGameLocation != null && me.currentGameLocation.Pointer == __instance.Pointer)) return false;
+            if (!newVal && ForwardTerminal(WorldEventKind.AlarmOffRequest, true, __instance.id, 0, -999)) return false;
             return HostDecides();
         }
         static void Postfix(NewAddress __instance) =>
@@ -504,7 +644,8 @@ public static class WorldSync
     [HarmonyPatch(typeof(NewAddress), nameof(NewAddress.SetTargetMode))]
     static class AddressMode
     {
-        static bool Prefix() => HostDecides();
+        static bool Prefix(NewAddress __instance, NewBuilding.AlarmTargetMode newMode) =>
+            !ForwardTerminal(WorldEventKind.TargetModeRequest, true, __instance.id, (int)newMode, -999) && HostDecides();
         static void Postfix(NewAddress __instance) =>
             SendAlarm(true, __instance.id, __instance.alarmActive, __instance.targetMode, __instance.alarmTimer, -999);
     }

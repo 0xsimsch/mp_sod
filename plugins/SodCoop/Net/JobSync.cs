@@ -43,6 +43,17 @@ public static class JobSync
     static bool IsHost => Session?.Role == NetSession.SessionRole.Host;
     static bool IsClient => Session?.Role == NetSession.SessionRole.Client;
 
+    /// <summary>New session, session over or a reloaded world: job ids waiting to be sent belong to the old one.</summary>
+    public static void Reset()
+    {
+        _dirty.Clear();
+        _lastLogged.Clear();
+        _flushAt = 0f;
+        _nextResend = 0f;
+    }
+
+    static JobSync() => World.Reloaded += Reset;
+
     static void MarkDirty(SideJob job)
     {
         if (job == null || _applying || Session == null || !World.Ready) return;

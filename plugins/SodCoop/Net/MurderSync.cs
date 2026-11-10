@@ -57,7 +57,20 @@ public static class MurderSync
             for (int i = mc.activeMurders.Count - 1; i >= 0; i--)
                 if (mc.activeMurders[i] != null && mc.activeMurders[i].murderID == m.murderID) mc.activeMurders.RemoveAt(i);
             m.LoadSerializedData();
-            mc.activeMurders.Add(m);
+            // A solved murder is over: the host's director takes it off its active list. Kept on ours, searching the
+            // old body still counted as discovering an active murder's victim (ActionController.Search).
+            bool solved = m.state == MurderController.MurderState.solved;
+            if (!solved) mc.activeMurders.Add(m);
+            else
+            {
+                var done = mc.inactiveMurders;
+                if (done != null)
+                {
+                    for (int i = done.Count - 1; i >= 0; i--)
+                        if (done[i] != null && done[i].murderID == m.murderID) done.RemoveAt(i);
+                    done.Add(m);
+                }
+            }
             Applied++;
             Plugin.Event($"MURDER record {m.murderID} applied: state={m.state} victim={m.victimID} murderer={m.murdererID} preset={m.presetStr} ({json.Length} chars)");
         }

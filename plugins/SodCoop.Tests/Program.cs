@@ -48,8 +48,8 @@ static class Program
         var ia = Protocol.ReadIllegalAction(Protocol.IllegalAction(new IllegalActionMsg { PlayerId = 2, Active = true }));
         Check(ia.PlayerId == 2 && ia.Active, "IllegalAction round trip");
 
-        var door = Protocol.ReadDoorState(Protocol.DoorState(new DoorStateMsg { DoorKey = 221001, Ajar = -1f, Locked = true, ByPlayer = 255 }));
-        Check(door.DoorKey == 221001 && door.Ajar == -1f && door.Locked && door.ByPlayer == 255, "DoorState round trip");
+        var door = Protocol.ReadDoorState(Protocol.DoorState(new DoorStateMsg { DoorKey = 221001, Ajar = -1f, Locked = true, ByPlayer = 255, LockAction = true }));
+        Check(door.DoorKey == 221001 && door.Ajar == -1f && door.Locked && door.ByPlayer == 255 && door.LockAction, "DoorState round trip");
 
         var ts = Protocol.ReadTimeSync(Protocol.TimeSync(new TimeSyncMsg { GameTime = 46.25f, TimeSpeed = 2, LeapYearCycle = 3, Paused = true, Difficulty = 2 }));
         Check(ts.GameTime == 46.25f && ts.TimeSpeed == 2 && ts.LeapYearCycle == 3 && ts.Paused && ts.Difficulty == 2, "TimeSync round trip");

@@ -239,6 +239,10 @@ public struct DoorStateMsg
     public bool Locked;
     /// <summary>Player who caused it, 255 = a citizen / the world.</summary>
     public byte ByPlayer;
+    /// <summary>The change came from a lock/unlock (SetLocked), not from opening/closing. The host takes
+    /// <see cref="Locked"/> from a client only then: a plain open/close carries the client's copy of the lock,
+    /// which may be stale.</summary>
+    public bool LockAction;
 }
 
 public struct TimeSyncMsg
@@ -276,6 +280,8 @@ public enum CaseEventKind : byte
     CustomLink = 7,
     /// <summary>FactCustom.SetCustomName on a player-drawn string. Id = from evID ␟ to evID ␟ name.</summary>
     CustomLinkName = 8,
+    /// <summary>A player-drawn string was removed (StringController.RemoveCustomLink). Id = from evID ␟ to evID ␟ from keys ␟ to keys.</summary>
+    CustomLinkRemove = 9,
 }
 
 public struct CaseEventMsg
@@ -397,7 +403,7 @@ public struct ForensicMsg
 public static class Protocol
 {
     /// <summary>Bump on any wire change. Hosts reject other versions in the handshake.</summary>
-    public const ushort Version = 47;
+    public const ushort Version = 48;
     const ushort Magic = 0x4D53; // "SM"
 
     public static byte[] Hello(HelloMsg m) => Write(MsgType.Hello, w =>
@@ -448,12 +454,12 @@ public static class Protocol
 
     public static byte[] DoorState(DoorStateMsg m) => Write(MsgType.DoorState, w =>
     {
-        w.Write(m.DoorKey); w.Write(m.Ajar); w.Write(m.Locked); w.Write(m.ByPlayer);
+        w.Write(m.DoorKey); w.Write(m.Ajar); w.Write(m.Locked); w.Write(m.ByPlayer); w.Write(m.LockAction);
     });
 
     public static DoorStateMsg ReadDoorState(byte[] d) => Read(d, r => new DoorStateMsg
     {
-        DoorKey = r.ReadInt32(), Ajar = r.ReadSingle(), Locked = r.ReadBoolean(), ByPlayer = r.ReadByte(),
+        DoorKey = r.ReadInt32(), Ajar = r.ReadSingle(), Locked = r.ReadBoolean(), ByPlayer = r.ReadByte(), LockAction = r.ReadBoolean(),
     });
 
     public static byte[] TimeSync(TimeSyncMsg m) => Write(MsgType.TimeSync, w =>
@@ -492,7 +498,10 @@ public static class Protocol
         return list;
     });
 
-    public static byte[] VictimDiscovered() => Write(MsgType.VictimDiscovered, w => { });
+    /// <summary>Client → host: our player searched this murder victim's body (humanID).</summary>
+    public static byte[] VictimDiscovered(int victimHumanId) => Write(MsgType.VictimDiscovered, w => w.Write(victimHumanId));
+
+    public static int ReadVictimDiscovered(byte[] d) => Read(d, r => r.ReadInt32());
 
     public static byte[] WorldLoaded() => Write(MsgType.WorldLoaded, w => { });
 

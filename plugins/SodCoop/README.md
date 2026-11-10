@@ -77,6 +77,22 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.62: open items from the audit and SYNC_GAPS (protocol v48, untested in game)
+
+- **Hand-in (G1):** a client's murder/story hand-in is blocked locally and submitted on the host (`CaseResolve` kind 4); the host's record brings "submitted" and the result back. Side-job hand-ins go through the submit fact.
+- **Case board (G6):** a client's typed answers survive host re-sends; clients follow the host's active case only on the welcome batch or an explicit switch. Pins merge per field (position, colour, collapsed, hidden connections); string colours and a field both players changed are still last-writer-wins. Deleting a player-drawn string is sent (`CaseEvent` kind 9); a second string between the same pins is created.
+- **Dialog rewards (G20):** guest passes, passcodes, phone numbers, social credit and lockpicks from a replayed client dialog no longer land on the host.
+- **Body discovery (G22):** a client forwards only its own player's search, with the victim id (`VictimDiscovered` now carries it); the host checks it. Solved murders leave the client's active list.
+- **Doors:** `DoorState` has a `LockAction` flag; the host takes the lock state from a client only for a lock action and corrects a client whose door differs.
+- **Join:** state-setting events between the snapshot capture's start and the hold queue are replayed to the joiner.
+- **Removed citizens (G5):** the host's `RemoveFromWorld` reaches clients (`WorldEvent` kind 10) and they leave the pose stream.
+- **Security terminal (G11):** a client's alarm-off and target-mode changes are requests to the host (`WorldEvent` kinds 11, 12).
+- **Released citizens (G15):** a citizen that leaves the stream knocked out or cuffed stays that way; others lose their pursuit state before re-planning. Clients drop every non-network hit from a citizen.
+- **Switches (G17):** citizen-made switch changes far from every client are remembered and sent when a client comes within 60 m. A client's own citizens no longer flip switches anywhere (was: only near the player).
+- **Citizens:** carry pose and the weapon's combat-arms pose are part of the citizen state.
+
+Not done: G23 (sentry double hits), and the rest of `analysis/SYNC_GAPS.md` (G2–G4, G8–G10, G12–G14, G16, G18, G19, G21, P2).
+
 ## 0.9.61: sync audit fixes (protocol v47, untested in game)
 
 From a read-through of the mod against the game's disassembly. Builds; nothing here was seen in a session yet.

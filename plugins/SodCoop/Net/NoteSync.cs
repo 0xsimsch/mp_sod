@@ -42,7 +42,8 @@ public static class NoteSync
                 var from = FindEvidence(parts[0]);
                 var to = FindEvidence(parts[1]);
                 if (from == null || to == null || EvidenceCreator.Instance == null) return false;
-                if (FindCustomLink(parts[0], parts[1]) == null)
+                // The same two pins can carry more than one string (different data keys): only an exact copy is skipped.
+                if (FindCustomLink(parts[0], parts[1], parts[2], parts[3]) == null)
                     EvidenceCreator.Instance.CreateFact(CustomLinkPreset, from, to, null, null, m.A != 0, null,
                         parts[2].Length > 0 ? Keys(parts[2]) : null, parts[3].Length > 0 ? Keys(parts[3]) : null, true);
                 RefreshStrings();
@@ -53,6 +54,24 @@ public static class NoteSync
                 var fact = FindCustomLink(parts[0], parts[1]);
                 if (fact == null) return false;
                 fact.SetCustomName(parts[2]);
+                RefreshStrings();
+                return true;
+            }
+            case CaseEventKind.CustomLinkRemove when parts.Length == 4:
+            {
+                // What StringController.RemoveCustomLink does: take the fact off both evidences and off the fact list.
+                var fact = FindCustomLink(parts[0], parts[1], parts[2], parts[3]) ?? FindCustomLink(parts[0], parts[1]);
+                if (fact == null) return true; // not here (any more): nothing to remove
+                try
+                {
+                    var from = fact.fromEvidence != null && fact.fromEvidence.Count > 0 ? fact.fromEvidence[0] : null;
+                    var to = fact.toEvidence != null && fact.toEvidence.Count > 0 ? fact.toEvidence[0] : null;
+                    if (from != null) from.RemoveFactLink(fact);
+                    if (to != null) to.RemoveFactLink(fact);
+                    GameplayController.Instance?.factList?.Remove(fact);
+                    Plugin.Event($"NOTES string {parts[0]} -> {parts[1]} removed (removed by P{m.ByPlayer})");
+                }
+                catch (Exception e) { Plugin.Event($"NOTES removing string {parts[0]} -> {parts[1]} failed: {e.Message}"); }
                 RefreshStrings();
                 return true;
             }
@@ -72,7 +91,8 @@ public static class NoteSync
         return CaseSync.CreateOnDemand(id);
     }
 
-    static Fact FindCustomLink(string fromId, string toId)
+    /// <param name="fromKeys">With both key texts given (see <see cref="KeyText"/>), only a string with those data keys.</param>
+    static Fact FindCustomLink(string fromId, string toId, string fromKeys = null, string toKeys = null)
     {
         var list = GameplayController.Instance?.factList;
         if (list == null) return null;
@@ -80,7 +100,9 @@ public static class NoteSync
         {
             var f = list[i];
             if (f == null || !f.isCustom) continue;
-            if (FirstId(f.fromEvidence) == fromId && FirstId(f.toEvidence) == toId) return f;
+            if (FirstId(f.fromEvidence) != fromId || FirstId(f.toEvidence) != toId) continue;
+            if (fromKeys != null && toKeys != null && (KeyText(f.fromDataKeys) != fromKeys || KeyText(f.toDataKeys) != toKeys)) continue;
+            return f;
         }
         return null;
     }
@@ -182,6 +204,50 @@ public static class NoteSync
                     $"{from}{Sep}{to}{Sep}{KeyText(__result.fromDataKeys)}{Sep}{KeyText(__result.toDataKeys)}", forceDiscoveryOnCreate ? 1 : 0);
             }
             catch (Exception e) { Plugin.Event($"NOTES string sync failed: {e.Message}"); }
+        }
+    }
+
+    /// <summary>
+    /// A player removes a string they drew (the string's context menu → StringController.RemoveCustomLink, which takes
+    /// every custom fact of that connection off its evidences and the fact list). Report the ones that are gone after.
+    /// </summary>
+    [HarmonyPatch(typeof(StringController), nameof(StringController.RemoveCustomLink))]
+    static class CustomLinkRemoved
+    {
+        static void Prefix(StringController __instance, out System.Collections.Generic.List<(Fact fact, string id)> __state)
+        {
+            __state = null;
+            if (!ShouldReport) return;
+            try
+            {
+                var facts = __instance?.connection?.facts;
+                if (facts == null) return;
+                for (int i = 0; i < facts.Count; i++)
+                {
+                    var f = facts[i];
+                    if (f == null || !f.isCustom) continue;
+                    string from = FirstId(f.fromEvidence), to = FirstId(f.toEvidence);
+                    if (from == null || to == null) continue;
+                    (__state ??= new System.Collections.Generic.List<(Fact, string)>())
+                        .Add((f, $"{from}{Sep}{to}{Sep}{KeyText(f.fromDataKeys)}{Sep}{KeyText(f.toDataKeys)}"));
+                }
+            }
+            catch (Exception e) { Plugin.Event($"NOTES string removal check failed: {e.Message}"); }
+        }
+
+        static void Postfix(System.Collections.Generic.List<(Fact fact, string id)> __state)
+        {
+            if (__state == null || !ShouldReport) return;
+            try
+            {
+                var list = GameplayController.Instance?.factList;
+                foreach (var (fact, id) in __state)
+                {
+                    if (list != null && list.Contains(fact)) continue; // still there: not removed after all
+                    CaseSync.Report(CaseEventKind.CustomLinkRemove, id);
+                }
+            }
+            catch (Exception e) { Plugin.Event($"NOTES string removal sync failed: {e.Message}"); }
         }
     }
 

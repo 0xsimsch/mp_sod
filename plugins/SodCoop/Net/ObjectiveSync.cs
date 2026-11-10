@@ -44,6 +44,29 @@ public static class ObjectiveSync
     const byte KindAnswers = 1;        // (CaseResolve) client → host: int caseId, int n, n × (str name, str input, str evidence)
     const byte KindResolved = 2;       // (CaseResolve) host → clients: int caseId, byte byPlayer
     const byte KindClosed = 3;         // (CaseResolve) either way, host relays: int caseId (the case was closed)
+    const byte KindSubmit = 4;         // (CaseResolve) client → host: int caseId, int hand-in interactable id (after KindAnswers)
+
+    /// <summary>
+    /// Host: when a player's hand-in (answers) for a case arrived. A hand-in is the player's own action at the hand-in
+    /// tray; for a side job the game then triggers the case's submit objective, which reaches us as a fact of a type
+    /// the host otherwise decides alone. Within this window that fact is the hand-in and is accepted.
+    /// </summary>
+    static readonly Dictionary<(byte player, int caseId), float> _handInAt = new();
+    const float HandInWindow = 15f;
+    /// <summary>Client: when we last asked the host to submit a case (no second request while it is on its way).</summary>
+    static readonly Dictionary<int, float> _submitSentAt = new();
+    const float SubmitRepeat = 10f;
+
+    /// <summary>Session over: nothing waiting belongs to the next one.</summary>
+    public static void Reset()
+    {
+        _requested.Clear();
+        _droppedLogged.Clear();
+        _pendingResolved.Clear();
+        _rejectLogged.Clear();
+        _handInAt.Clear();
+        _submitSentAt.Clear();
+    }
 
     /// <summary>A case was closed on this machine (CaseRecordSync): client → host, host → every client.</summary>
     internal static void SendClosed(int caseId)
@@ -184,7 +207,15 @@ public static class ObjectiveSync
                 q.inputtedEvidence = evidence;
                 try { q.UpdateValid(c); } catch { /* grading happens again on resolve */ }
             }
+            if (fromPlayer != null) _handInAt[(fromPlayer.Value.Value, caseId)] = Time.unscaledTime;
             Plugin.Event($"OBJ {fromPlayer} handed in case {caseId} with {n} answer(s)");
+        }
+        else if (type == ExtraWire.CaseResolve && kind == KindSubmit && s.Role == NetSession.SessionRole.Host)
+        {
+            int caseId = r.ReadInt32();
+            int handInId = r.ReadInt32();
+            if (fromPlayer == null) return; // only a joined client
+            HostSubmit(fromPlayer.Value, caseId, handInId);
         }
         else if (type == ExtraWire.CaseResolve && kind == KindResolved && s.Role == NetSession.SessionRole.Client)
         {
@@ -335,7 +366,12 @@ public static class ObjectiveSync
         if (trig.triggered) return;
         NetPlayer player = null;
         if (from != null) PlayerRegistry.TryGet(from.Value, out player);
-        if (!Judge(trig, player, out var why))
+        string why;
+        // A hand-in: the player's own action at the tray, announced by its answers just before (see _handInAt).
+        bool handIn = from != null && trig.triggerType == Objective.ObjectiveTriggerType.submitCase
+                      && _handInAt.TryGetValue((from.Value.Value, caseId), out var handedAt) && Time.unscaledTime - handedAt < HandInWindow;
+        if (handIn) why = "the player handed the case in";
+        else if (!Judge(trig, player, out why))
         {
             FactsRejected++;
             LogReject(caseId, objName, trigName, $"OBJ fact from {from}: {what} rejected: {why}");
@@ -347,6 +383,47 @@ public static class ObjectiveSync
         try { trig.Trigger(false); } // progress → Complete; the postfixes tell the clients
         catch (Exception e) { Plugin.Event($"OBJ triggering {what} failed: {e.Message}"); }
         finally { _completingFor = 0; }
+    }
+
+    /// <summary>
+    /// Host: a client handed a murder (or story) case in at a hand-in tray. What ActionController.HandInCase does for
+    /// those case types on the machine of the player who hands in: note the case for processing
+    /// (GameplayController.caseProcessing[case] = game time) and set it to submitted. The answers arrived just before
+    /// (KindAnswers). Processing, Resolve and the reveal then run here as for the host's own hand-in, and the case
+    /// record / "resolved" bring them to every client. Side-job cases don't come this way: there the game triggers the
+    /// case's submit objective, which arrives as a fact (OnFact).
+    /// </summary>
+    static void HostSubmit(PlayerId who, int caseId, int handInId)
+    {
+        var c = FindCase(caseId);
+        if (c == null) { Plugin.Event($"OBJ {who} handed in case {caseId}, which the host doesn't have"); return; }
+        if (c.caseType != Case.CaseType.murder && c.caseType != Case.CaseType.mainStory)
+        {
+            Plugin.Event($"OBJ {who} handed in case {caseId} \"{c.name}\" ({c.caseType}): not a murder case, left to its submit objective");
+            return;
+        }
+        if (c.caseStatus == Case.CaseStatus.submitted || c.caseStatus == Case.CaseStatus.closable || c.caseStatus == Case.CaseStatus.archived)
+        {
+            Plugin.Event($"OBJ {who} handed in case {caseId} \"{c.name}\", which is already {c.caseStatus}: ignored");
+            CaseRecordSync.MarkChanged(c); // make sure that client sees the status
+            return;
+        }
+        try
+        {
+            var processing = GameplayController.Instance?.caseProcessing;
+            var session = SessionData.Instance;
+            if (processing != null && session != null)
+            {
+                if (processing.ContainsKey(c)) processing[c] = session.gameTime;
+                else processing.Add(c, session.gameTime);
+            }
+            c.SetStatus(Case.CaseStatus.submitted, true); // its postfix sends the case record
+            Plugin.Event($"OBJ {who} handed in case {caseId} \"{c.name}\" at #{handInId}: submitted here, processing");
+            string text = $"{Notify.NameOf(who.Value)} handed in case \"{c.name}\"";
+            Notify.Show(text, InterfaceControls.Icon.star);
+            Notify.Broadcast(text, InterfaceControls.Icon.star);
+        }
+        catch (Exception e) { Plugin.Event($"OBJ submitting case {caseId} for {who} failed: {e}"); }
     }
 
     static void LogReject(int caseId, string objName, string trigName, string message)
@@ -478,17 +555,39 @@ public static class ObjectiveSync
     [HarmonyPatch(typeof(ActionController), nameof(ActionController.HandInCase))]
     static class HandIn
     {
-        static void Prefix()
+        static bool Prefix(Interactable what, Actor who)
         {
-            if (!IsClient || !World.Ready) return;
+            if (!IsClient || !World.Ready) return true;
+            if (who != null && Player.Instance != null && who.Pointer != Player.Instance.Pointer) return true; // not our player
             var c = CasePanelController.Instance?.activeCase;
-            var qs = c?.resolveQuestions;
-            if (qs == null) return;
+            if (c == null) return true;
+            SendAnswers(c);
+            // Murder and story cases: HandInCase would set our copy to submitted and start processing here, where
+            // Resolve never runs. The host does both (HostSubmit); its case record shows "submitted" here a moment later.
+            if (c.caseType != Case.CaseType.murder && c.caseType != Case.CaseType.mainStory) return true; // side job: its submit objective goes to the host as a fact
+            float now = Time.unscaledTime;
+            if (_submitSentAt.TryGetValue(c.id, out var sentAt) && now - sentAt < SubmitRepeat)
+            {
+                Notify.Show("The case is already handed in; the host is processing it", InterfaceControls.Icon.star);
+                return false;
+            }
+            _submitSentAt[c.id] = now;
+            int caseId = c.id, handInId = what != null ? what.id : -1;
+            S.SendExtra(ExtraWire.Write(ExtraWire.CaseResolve, KindSubmit, w => { w.Write(caseId); w.Write(handInId); }));
+            Plugin.Event($"OBJ case {caseId} \"{c.name}\" handed in at #{handInId}: asked the host to submit it");
+            Notify.Show($"Case \"{c.name}\" handed in", InterfaceControls.Icon.star);
+            return false;
+        }
+
+        static void SendAnswers(Case c)
+        {
+            var qs = c.resolveQuestions; // sent even without questions: the message is also what announces the hand-in
+            int count = qs != null ? qs.Count : 0;
             S.SendExtra(ExtraWire.Write(ExtraWire.CaseResolve, KindAnswers, w =>
             {
                 w.Write(c.id);
-                w.Write(qs.Count);
-                for (int i = 0; i < qs.Count; i++)
+                w.Write(count);
+                for (int i = 0; i < count; i++)
                 {
                     var q = qs[i];
                     ExtraWire.Str(w, q?.name);

@@ -21,17 +21,16 @@ public static class CaseIds
     static bool IsClient => Session?.Role == NetSession.SessionRole.Client;
 
     /// <summary>Host: a client found the current victim.</summary>
-    public static void OnClientDiscovery(PlayerId who)
+    public static void OnClientDiscovery(PlayerId who, int victimHumanId)
     {
         var mc = MurderController.Instance;
         if (mc == null) return;
-        // The message names no victim, and a client's murder list is never pruned (solved murders stay on it), so a
-        // client searching an old body asks too. The game's own check (ActionController.Search) wants the searched
-        // body to be the victim of an active murder: without any dead victim among ours there is nothing to discover,
-        // and OnVictimDiscovery would open an empty murder case.
-        if (!HasDeadVictim(mc))
+        // The game's own check (ActionController.Search) wants the searched body to be the victim of an active murder.
+        // The client checked that against its copy of the murders; check it against ours: otherwise OnVictimDiscovery
+        // would open an empty murder case for an old body.
+        if (!HasDeadVictim(mc, victimHumanId))
         {
-            Plugin.Event($"CASE {who} reported a victim, but no active murder here has a dead victim: ignored");
+            Plugin.Event($"CASE {who} reported citizen {victimHumanId} as a victim, but no active murder here has that dead victim: ignored");
             return;
         }
         Plugin.Event($"CASE {who} discovered the victim: running the discovery here (the murder case goes out to everyone)");
@@ -40,7 +39,7 @@ public static class CaseIds
         finally { _applying = false; }
     }
 
-    static bool HasDeadVictim(MurderController mc)
+    static bool HasDeadVictim(MurderController mc, int victimHumanId)
     {
         try
         {
@@ -50,7 +49,7 @@ public static class CaseIds
             for (int i = 0; i < murders.Count; i++)
             {
                 var m = murders[i];
-                if (m == null) continue;
+                if (m == null || m.victimID != victimHumanId) continue;
                 if (citizens.TryGetValue(m.victimID, out var victim) && victim != null && victim.isDead) return true;
             }
             return false;
@@ -98,10 +97,45 @@ public static class CaseIds
         static bool Prefix()
         {
             if (!IsClient || _applying) return true;
-            Session?.SendVictimDiscovered();
-            Plugin.Event("CASE found the victim: asking the host to open the murder case");
+            // Only our own player's search of a body is a discovery to report. The other caller
+            // (GameplayController.NewMurderCaseNotify, an enforcer call) is this machine's citizens finding a body:
+            // citizens are the host's, and it runs its own.
+            if (!_inPlayerSearch)
+            {
+                Plugin.Event("CASE victim discovery here that isn't our player's search: left to the host");
+                return false;
+            }
+            Session?.SendVictimDiscovered(_searchVictim);
+            Plugin.Event($"CASE found the victim (citizen {_searchVictim}): asking the host to open the murder case");
             return false;
         }
+    }
+
+    [System.ThreadStatic] static bool _inPlayerSearch;
+    [System.ThreadStatic] static int _searchVictim;
+
+    /// <summary>Client: who our player is searching, for the discovery the search may trigger (ActionController.Search
+    /// calls MurderController.OnVictimDiscovery when the body is an active murder's victim).</summary>
+    [HarmonyPatch(typeof(ActionController), nameof(ActionController.Search))]
+    static class PlayerSearch
+    {
+        static void Prefix(Interactable what, Actor who)
+        {
+            _inPlayerSearch = false;
+            _searchVictim = -1;
+            if (!IsClient) return;
+            try
+            {
+                if (who == null || Player.Instance == null || who.Pointer != Player.Instance.Pointer) return;
+                var body = what?.isActor?.TryCast<Human>();
+                if (body == null) return;
+                _searchVictim = body.humanID;
+                _inPlayerSearch = true;
+            }
+            catch (System.Exception e) { Plugin.Event($"CASE search check failed: {e.Message}"); }
+        }
+
+        static void Finalizer() => _inPlayerSearch = false;
     }
 
     [HarmonyPatch(typeof(MurderController), nameof(MurderController.TriggerCoverUpObjective))]

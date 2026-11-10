@@ -66,7 +66,10 @@ static class ClientPerception
         {
             if (!IsClient || ApplyingNetworkDamage || fromWho == null) return true;
             var h = fromWho.TryCast<Human>();
-            return h == null || !Puppet.NpcPuppets.IsDriven(h);
+            // Any citizen, not only the ones the host drives right now (SYNC_GAPS G15): one the host just stopped
+            // sending can finish an attack on its local AI, and that hit never happened on the host. Hits by citizens
+            // and by other players' bodies only count when the host sends them. Our own (a grenade of ours) stays.
+            return h == null || (Player.Instance != null && h.Pointer == Player.Instance.Pointer);
         }
     }
 }

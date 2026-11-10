@@ -62,6 +62,15 @@ public static class NpcPuppets
                 var cit = h.TryCast<Citizen>();
                 if (cit == null || Doubles.IsBorrowed(cit) || cit.ai == null) continue; // a player's body (here or elsewhere)
                 e = new Entry { Citizen = cit, Driver = new BodyDriver(cit), Source = new NetworkPoseSource(), AiWasEnabled = cit.ai.enabled };
+                if (_parked.Remove(c.HumanId, out var parked))
+                {
+                    // Back in range: carry on from the state it was left in, so "no longer knocked out / cuffed"
+                    // is seen as a change (ApplyStates) and its AI setting from before the host took it is kept.
+                    e.AiWasEnabled = parked.AiWasEnabled;
+                    e.KnockedOut = parked.KnockedOut;
+                    e.PostureSeen = parked.PostureSeen;
+                    if (e.KnockedOut) _koPtrs.Add(cit.Pointer);
+                }
                 cit.ai.enabled = false;
                 _driven[c.HumanId] = e;
                 _drivenPtrs.Add(cit.Pointer);
@@ -146,12 +155,46 @@ public static class NpcPuppets
             if (e.Citizen.ai != null && e.Citizen.ai.enabled) e.Citizen.ai.enabled = false;
             if (e.Source.TryGetPose(now, out var pose)) e.Driver.Apply(pose);
         }
-        if (stale != null) foreach (var id in stale) Release(id);
+        if (stale != null) foreach (var id in stale) Release(id, InClientSession);
     }
 
-    static void Release(int id)
+    // SYNC_GAPS G15: a citizen that leaves the host's range knocked out or cuffed used to be woken / handed to its
+    // local AI (it stood up, or walked off in cuffs) although it still lies or stands there on the host. Those are
+    // parked instead: left exactly as the host had them, AI off, until the host sends them again or the session ends.
+    static readonly Dictionary<int, Entry> _parked = new();
+
+    public static int Parked => _parked.Count;
+
+    static bool InClientSession => NetSession.Current != null && NetSession.Current.Role == NetSession.SessionRole.Client;
+
+    /// <summary>A released citizen must not keep chasing or watching a player on its own AI: the host decided that.</summary>
+    static void ClearPursuit(Citizen c, int id)
+    {
+        try
+        {
+            var ai = c.ai;
+            if (ai == null) return;
+            if (!ai.persuit && ai.persuitTarget == null && ai.reactionState == NewAIController.ReactionState.none) return;
+            ai.persuit = false;
+            ai.persuitTarget = null;
+            if (ai.reactionState != NewAIController.ReactionState.none) ai.SetReactionState(NewAIController.ReactionState.none);
+        }
+        catch (System.Exception ex) { Plugin.Event($"NPC clearing the pursuit of {id} failed: {ex.Message}"); }
+    }
+
+    static void Release(int id, bool keepState = false)
     {
         if (!_driven.Remove(id, out var e)) return;
+        if (keepState && e.Citizen != null && e.Citizen.ai != null && !e.Citizen.isDead && !PlayerRegistry.IsRemoteBody(e.Citizen)
+            && (e.KnockedOut || e.Arms == (int)CitizenAnimationController.ArmsBoolSate.armsCuffed))
+        {
+            // Still counts as driven (_drivenPtrs/_koPtrs stay): nothing local may wake it, move it or let it hit us.
+            _parked[id] = e;
+            e.Citizen.ai.enabled = false;
+            CitizenEventSync.Released(id);
+            Plugin.Event($"NPC citizen {id} left the host's range {(e.KnockedOut ? "knocked out" : "cuffed")}: kept that way");
+            return;
+        }
         if (e.KnockedOut && e.Citizen != null && e.Citizen.ai != null)
         {
             e.Citizen.ai.enabled = true;
@@ -167,6 +210,7 @@ public static class NpcPuppets
             // Re-plan from where the host left the citizen, instead of resuming a stale local goal (seen: U-turns at the edge).
             // Its own weapon again first (CitizenEventSync set the host's preset for the attack animations).
             try { e.Citizen.ai.UpdateCurrentWeapon(); } catch (System.Exception ex) { Plugin.Event($"NPC weapon restore for {id} failed: {ex.Message}"); }
+            ClearPursuit(e.Citizen, id);
             try { e.Citizen.ai.AITick(true, true); }
             catch (System.Exception ex) { Plugin.Event($"NPC re-plan for {id} failed: {ex.Message}"); }
         }
@@ -176,11 +220,16 @@ public static class NpcPuppets
     public static void Forget(int humanId)
     {
         if (_driven.Remove(humanId, out var e) && e.Citizen != null) { _drivenPtrs.Remove(e.Citizen.Pointer); _koPtrs.Remove(e.Citizen.Pointer); }
+        if (_parked.Remove(humanId, out var pk) && pk.Citizen != null) { _drivenPtrs.Remove(pk.Citizen.Pointer); _koPtrs.Remove(pk.Citizen.Pointer); }
         CitizenEventSync.Released(humanId);
     }
 
     public static void ReleaseAll()
     {
+        // Parked citizens too: nobody will say otherwise any more, so they get the old release (woken, own AI).
+        foreach (var kv in new List<KeyValuePair<int, Entry>>(_parked))
+            if (!_driven.ContainsKey(kv.Key)) _driven[kv.Key] = kv.Value;
+        _parked.Clear();
         foreach (var id in new List<int>(_driven.Keys)) Release(id);
         _koPtrs.Clear();
         CitizenEventSync.ClearClient();

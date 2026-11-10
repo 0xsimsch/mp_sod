@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.61";
+    public const string ModVersion = "0.9.62";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -80,7 +80,7 @@ public sealed class NetSession : IDisposable
             for (int i = 0; i < citizens.Count && batch.Count < 255; i++)
             {
                 var c = citizens[i];
-                if (c == null || c.isDead || Puppet.Doubles.IsBorrowed(c)) continue;
+                if (c == null || c.isDead || c.removedFromWorld || Puppet.Doubles.IsBorrowed(c)) continue; // removed: arrested, gone
                 var pos = c.transform.position;
                 // 40 m indoors / 70 m outdoors, +10 m for citizens already synced (no pop-in/out at the edge).
                 bool synced = _npcLastSent.TryGetValue((kv.Key, c.humanID), out var prevSent) && now - prevSent.time < 3f;
@@ -252,6 +252,8 @@ public sealed class NetSession : IDisposable
         DoorSync.Reset();
         TalkSync.Reset();
         CaseRecordSync.Reset();
+        JobSync.Reset();
+        ObjectiveSync.Reset();
         if (ReferenceEquals(Current, this)) Current = null;
         Plugin.Event($"NET session closed (in {PacketsIn}, out {PacketsOut})");
     }
@@ -723,7 +725,7 @@ public sealed class NetSession : IDisposable
             case MsgType.DialogExecute when Role == SessionRole.Host && _playerOf.TryGetValue(from, out var dlgFrom): DialogSync.OnPacket(dlgFrom, data); break;
             case MsgType.DialogEnd when Role == SessionRole.Host && _playerOf.TryGetValue(from, out var dlgEndFrom): DialogSync.OnPacket(dlgEndFrom, data); break;
             case MsgType.WorldLoaded when Role == SessionRole.Host: FlushLoadQueue(from, "its world is running"); break;
-            case MsgType.VictimDiscovered when Role == SessionRole.Host && _playerOf.TryGetValue(from, out var finder): CaseIds.OnClientDiscovery(finder); break;
+            case MsgType.VictimDiscovered when Role == SessionRole.Host && _playerOf.TryGetValue(from, out var finder): CaseIds.OnClientDiscovery(finder, Protocol.ReadVictimDiscovered(data)); break;
             case MsgType.Phone:
                 PhoneSync.OnPacket(Role == SessionRole.Host && _playerOf.TryGetValue(from, out var phoneSender) ? phoneSender : (PlayerId?)null, data);
                 break;
@@ -846,7 +848,11 @@ public sealed class NetSession : IDisposable
         CaseRecordSync.SendAll((json, active, fresh) => SendTo(from, Protocol.CaseRecord(json, active, fresh), true));
         SendTo(from, Protocol.BodyMap(BodyMapNow()), true);
         NewsSync.SendTo(data => SendTo(from, data, true));
-        if (isNewPlayer) SnapshotSync.RequestFor(chunk => SendTo(from, chunk, true), () => _transport.PendingReliableBytes(from), () => BeginLoadQueue(from));
+        if (isNewPlayer)
+        {
+            _preCapture[from] = new List<byte[]>(); // world changes while the snapshot is being captured: see SendTo
+            SnapshotSync.RequestFor(chunk => SendTo(from, chunk, true), () => _transport.PendingReliableBytes(from), () => BeginLoadQueue(from));
+        }
     }
 
     void OnWelcome(WelcomeMsg m)
@@ -963,7 +969,16 @@ public sealed class NetSession : IDisposable
             // Only the client's own actions are accepted, attributed to its body.
             if (!_playerOf.TryGetValue(from, out var id) || id.Value != m.ByPlayer) return;
             if (PlayerRegistry.TryGet(id, out var p)) actor = p.RemoteBody?.Human;
-            foreach (var peer in _playerOf.Keys) if (peer != from) SendTo(peer, data, true);
+            // The lock only from a lock/unlock action; a plain open/close keeps the host's lock (DoorSync.HostAccepts).
+            bool accepted = DoorSync.HostAccepts(ref m, out bool correct);
+            if (accepted)
+            {
+                var relay = correct ? Protocol.DoorState(m) : data;
+                foreach (var peer in _playerOf.Keys) if (peer != from) SendTo(peer, relay, true);
+                DoorSync.Apply(m, actor);
+            }
+            if (correct && DoorSync.StateOf(m.DoorKey, out var real)) SendTo(from, Protocol.DoorState(real), true);
+            return;
         }
         else if (m.ByPlayer != 255 && PlayerRegistry.TryGet(new PlayerId(m.ByPlayer), out var p))
         {
@@ -1128,9 +1143,9 @@ public sealed class NetSession : IDisposable
         foreach (var peer in _playerOf.Keys) SendTo(peer, data, true);
     }
 
-    public void SendVictimDiscovered()
+    public void SendVictimDiscovered(int victimHumanId)
     {
-        if (Role == SessionRole.Client && _hasHost && ClientWorldJoined) SendTo(_host, Protocol.VictimDiscovered(), true);
+        if (Role == SessionRole.Client && _hasHost && ClientWorldJoined) SendTo(_host, Protocol.VictimDiscovered(victimHumanId), true);
     }
 
     /// <summary>Client: the host's SteamID (Profiles keys a player's profile by host and city).</summary>
@@ -1360,6 +1375,7 @@ public sealed class NetSession : IDisposable
         foreach (var k in new List<(PeerId, int)>(_npcLastSent.Keys)) if (k.Item1 == peer) _npcLastSent.Remove(k);
         Patches.PauseSync.Forget(peer);
         _loadQueue.Remove(peer);
+        _preCapture.Remove(peer);
         if (!_playerOf.Remove(peer, out var id)) return;
         CitizenEventSync.Forget(id);
         StatusSync.Forget(id);
@@ -1396,6 +1412,10 @@ public sealed class NetSession : IDisposable
             if (q.packets.Count >= LoadQueueMax) FlushLoadQueue(peer, $"{LoadQueueMax} messages held");
             return true;
         }
+        // The snapshot is being captured: a change in these frames may or may not be in the save. It still goes out
+        // now (as before), and a copy of the kinds that only set a state is replayed after the load.
+        if (reliable && Role == SessionRole.Host && _preCapture.TryGetValue(peer, out var pre) && pre.Count < PreCaptureMax && SafeToReplay(data))
+            pre.Add(data);
         PacketsOut++;
         return _transport.Send(peer, data, reliable);
     }
@@ -1416,11 +1436,38 @@ public sealed class NetSession : IDisposable
         return t is not (MsgType.Welcome or MsgType.Reject or MsgType.SnapshotChunk or MsgType.Ping or MsgType.TimeSync or MsgType.Bye or null);
     }
 
+    // The save's contents are taken some frames before the capture task reports done (and the hold queue starts): a
+    // door, item or window that changed in between was neither in the save nor held. Between the snapshot request
+    // and the start of the queue, copies of the messages that only set a state (applying one twice changes nothing)
+    // are kept and put at the front of the queue. Throws, barges, requests, records and the rest are not replayed.
+    const int PreCaptureMax = 2000;
+    readonly Dictionary<PeerId, List<byte[]>> _preCapture = new();
+
+    static bool SafeToReplay(byte[] data)
+    {
+        switch (Protocol.PeekType(data))
+        {
+            case MsgType.DoorState: case MsgType.Spawn: case MsgType.Forensic: case MsgType.Death: case MsgType.Spatter:
+                return true;
+            case MsgType.Item: // [3] by player, [4] kind
+                return data.Length > 4 && data[4] != (byte)ItemEventKind.Throw;
+            case MsgType.WorldEvent: // [3] kind
+                if (data.Length <= 3) return false;
+                var kind = (WorldEventKind)data[3];
+                return kind == WorldEventKind.Weather || kind == WorldEventKind.Window || kind == WorldEventKind.DoorJam
+                    || kind == WorldEventKind.DoorTape || kind == WorldEventKind.Switch || kind == WorldEventKind.Alarm
+                    || kind == WorldEventKind.Breaker || kind == WorldEventKind.CitizenRemoved;
+            default:
+                return false;
+        }
+    }
+
     void BeginLoadQueue(PeerId peer)
     {
+        _preCapture.Remove(peer, out var pre);
         if (!_playerOf.ContainsKey(peer) || _loadQueue.ContainsKey(peer)) return;
-        _loadQueue[peer] = (new List<byte[]>(), UnityEngine.Time.unscaledTime);
-        Plugin.Event($"JOIN holding events for {peer} until its world is running");
+        _loadQueue[peer] = (pre ?? new List<byte[]>(), UnityEngine.Time.unscaledTime);
+        Plugin.Event($"JOIN holding events for {peer} until its world is running" + (pre != null && pre.Count > 0 ? $" ({pre.Count} from the capture frames kept for replay)" : ""));
     }
 
     void FlushLoadQueue(PeerId peer, string why)
