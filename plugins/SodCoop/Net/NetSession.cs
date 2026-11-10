@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.54";
+    public const string ModVersion = "0.9.55";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -459,13 +459,13 @@ public sealed class NetSession : IDisposable
         if (items != null && items.flashlight) msg.Flags |= PoseFlags.PlayerFlashlight;
         msg.Flags |= SeatedFlags(p, msg.Position.Y);
         if ((msg.Flags & (PoseFlags.PlayerSitting | PoseFlags.PlayerLying)) != 0) SeatPose(p, ref msg.Position, ref msg.Yaw);
+        else _seatYawFor = _seatLoggedFor = -1;
         if ((msg.Flags & PoseFlags.PlayerLying) != 0)
         {
             msg.Flags &= ~(PoseFlags.PlayerHiding | PoseFlags.PlayerInVent);
             var bed = InteractionController.Instance != null ? InteractionController.Instance.lockedInInteraction : null;
             if (bed?.preset != null && bed.preset.bedRightSide) msg.Flags |= PoseFlags.PlayerBedRight;
         }
-        else _seatYawFor = _seatLoggedFor = -1;
         msg.Activity = ActivityOf(p);
         msg.Swings = Patches.SwingCapture.Swings;
         msg.Blocks = Patches.SwingCapture.Blocks;
