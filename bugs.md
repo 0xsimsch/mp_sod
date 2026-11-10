@@ -6,6 +6,11 @@
     not fresh, so joining players don't see it for already-running cases. Untested in game.
 - animations for client for some persons seems to flicker
 - after a certain distance threshold is passed the other players body anomations stop render and the head rotates lol
+  - 0.9.56: the game's citizen LOD (Human.UpdateLODs) takes distant bodies onto its static LOD meshes and stops
+    the animator - wrong for a puppet we drive: it stays clearly visible to the partner. LateApply then multiplied
+    its neck offset onto the frozen bone every frame (the head spin). BodyLodPatch skips the LOD pass for possessed
+    bodies, RemotePlayerBody.KeepAnimated switches a disabled animator back on in the 0.5 s guard, and LateApply
+    only writes the neck while the animator runs. Untested.
 - on the case board for the client the needle indicator is optically in unpinned state but in reality its pinned after a new pin was created.
 
 * - when lying in bed one floats above the bed and rotating the mouse still rotates the person horizontally. the height offset is like 2x the height of the bed.

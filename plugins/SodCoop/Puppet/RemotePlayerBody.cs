@@ -122,6 +122,7 @@ public sealed class RemotePlayerBody
             float dist = cam != null ? Vector3.Distance(cam.transform.position, Human.transform.position) : 0f;
             if (Hidden) { if (Human.visible) Human.SetVisible(false, true); }
             else if (!Human.visible && dist < 80f) Human.SetVisible(true, true);
+            if (!KnockedOut) KeepAnimated();
             _marker.Ensure(Human, Owner.Id.Value);
             DropCitizenProps();
             if (!_combatShown) ArmWith(null);
@@ -132,6 +133,24 @@ public sealed class RemotePlayerBody
             CheckDrawn(cam);
         }
         catch (System.Exception e) { Plugin.Event($"body visibility guard for {Owner} failed: {e.Message}"); }
+    }
+
+    /// <summary>
+    /// The game's distance LOD (see Patches/BodyLodPatch) is not the only thing that can freeze the citizen's
+    /// animator — anything that leaves it disabled while we keep driving the body shows as a sliding frozen
+    /// pose. Switch it back in the 0.5 s guard; LateApply stops writing the neck while it is off, so the head
+    /// can't wind up.
+    /// </summary>
+    bool _animatorWasOff;
+
+    void KeepAnimated()
+    {
+        var animator = Human.animationController != null ? Human.animationController.mainAnimator : null;
+        if (animator == null) return;
+        if (animator.enabled) { _animatorWasOff = false; return; }
+        animator.enabled = true;
+        if (!_animatorWasOff) Plugin.Event($"{Owner} body: animator was disabled, switched it back on");
+        _animatorWasOff = true;
     }
 
     // Seen (two-machine test, 0.9.50): the nametag 3 m away in plain view, no body under it, while visible=True and all
@@ -432,7 +451,11 @@ public sealed class RemotePlayerBody
                 _shownPitch = Mathf.LerpAngle(_shownPitch, _lookPitch, k);
                 _shownYaw = Mathf.LerpAngle(_shownYaw, _lookYaw, k);
                 var neck = Human.neckTransform;
-                if (neck != null)
+                // The offset multiplies onto whatever the Animator wrote this frame. If the Animator is off,
+                // nothing resets the bone and the head winds up each frame (seen: pitch-axis spin at the LOD
+                // distance) — only write on top of a running animation.
+                var animator = Human.animationController != null ? Human.animationController.mainAnimator : null;
+                if (neck != null && animator != null && animator.enabled)
                 {
                     var body = Human.transform;
                     float yaw = Mathf.Clamp(Mathf.DeltaAngle(body.eulerAngles.y, _shownYaw), -70f, 70f);
