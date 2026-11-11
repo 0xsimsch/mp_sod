@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.80";
+    public const string ModVersion = "0.9.81";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -572,8 +572,8 @@ public sealed class NetSession : IDisposable
     /// bottom when there's no usage point or it is implausibly far away. Logged once per seat.
     /// Lying: a hospital bed's usage setup is misauthored both ways (seen 0.9.68: partner across the bed, look-at yaw
     /// 180 vs bed at 90; 0.9.77: hips at the pillow's left corner). A look-at that doesn't run along the furniture's
-    /// axis is replaced by the furniture's own rotation, head to the end its forward points at, and the hips go to the
-    /// main collider's center, 2.5 times the usage point's lift above the floor (the body would sink into the bed).
+    /// axis is replaced by the furniture's own rotation, head to the end its forward points at, and the hips move to
+    /// the main collider's center — the part along the bed taken 2.5 times over, the usage point being at its head end.
     /// </summary>
     static void SeatPose(Player p, bool lying, ref Vec3 pos, ref float yaw)
     {
@@ -631,12 +631,17 @@ public sealed class NetSession : IDisposable
                         {
                             var c = col.bounds.center;
                             var old = _seatPos.Value;
-                            // Testing 0.9.79: centered, but the body sank into the bed — the height the usage point
-                            // lifts above the floor has to be taken 2.5 times over (1.5 times more than the seat's).
-                            float lift = old.y - feet.Y;
-                            note += $", hips {new Vector2(c.x - old.x, c.z - old.z).magnitude:F2} m to the collider center, " +
-                                    $"lying {(2.5f * lift):F2} m over the floor ({lift:F2} x 2.5)";
-                            _seatPos = new Vector3(c.x, feet.Y + 2.5f * lift, c.z);
+                            // Testing 0.9.79: across the bed the collider center is right; along it the body still lay
+                            // at the pillow, so that part of the move is taken 2.5 times over. (0.9.80 lifted the
+                            // height instead — a misreading, reverted: the height stays the mattress top.)
+                            var f = fwd.normalized;
+                            var d = new Vector3(c.x - old.x, 0f, c.z - old.z);
+                            float along = Vector3.Dot(d, f);
+                            var cross = d - f * along;
+                            var hip = old + cross + f * (2.5f * along);
+                            note += $", hips {cross.magnitude:F2} m across and {(2.5f * along):F2} m along the bed " +
+                                    $"to the collider center ({along:F2} m x 2.5)";
+                            _seatPos = new Vector3(hip.x, old.y, hip.z);
                         }
                     }
                 }
