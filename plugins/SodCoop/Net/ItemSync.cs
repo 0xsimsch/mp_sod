@@ -140,9 +140,16 @@ public static class ItemSync
                     break;
                 }
                 case ItemEventKind.Switch:
-                    if (SwitchValue(it, (InteractablePreset.Switch)m.Holder) == m.HolderIsPlayer) break; // already so (the host's confirmation of our own flip)
+                    if (SwitchValue(it, (InteractablePreset.Switch)m.Holder) == m.HolderIsPlayer)
+                    {
+                        // Already so (the host's confirmation of our own flip, or the room set it with another of
+                        // its lights); the room behind it may still be lit otherwise.
+                        WorldSync.RoomLightsFollow(it, (InteractablePreset.Switch)m.Holder, m.HolderIsPlayer);
+                        break;
+                    }
                     var who = PlayerRegistry.TryGet(new PlayerId(m.ByPlayer), out var by) ? by.Body : null;
                     it.SetSwtichByType((InteractablePreset.Switch)m.Holder, m.HolderIsPlayer, who, true, false);
+                    WorldSync.RoomLightsFollow(it, (InteractablePreset.Switch)m.Holder, m.HolderIsPlayer);
                     Plugin.Event($"ITEM switch #{m.Id} {it.name} {(InteractablePreset.Switch)m.Holder}={m.HolderIsPlayer} from P{m.ByPlayer} applied");
                     break;
             }

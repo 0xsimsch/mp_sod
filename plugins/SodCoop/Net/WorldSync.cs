@@ -118,7 +118,7 @@ public static class WorldSync
     static Dictionary<int, NewBuilding> _buildings;
     static Dictionary<int, Interactable> _interactables;
 
-    static WorldSync() => World.Reloaded += () => { _doorKey = null; _buildings = null; _interactables = null; _lastWeather = default; _isBreaker.Clear(); _farSwitches.Clear(); };
+    static WorldSync() => World.Reloaded += () => { _doorKey = null; _buildings = null; _interactables = null; _lastWeather = default; _isBreaker.Clear(); _farSwitches.Clear(); _roomLights = null; };
 
     internal static bool TryDoorKey(NewDoor door, out int key)
     {
@@ -251,6 +251,7 @@ public static class WorldSync
                     var it = FindInteractable(m.I0);
                     if (it == null) break;
                     it.SetSwtichByType((InteractablePreset.Switch)m.I1, m.B0, null, true, false);
+                    RoomLightsFollow(it, (InteractablePreset.Switch)m.I1, m.B0);
                     break;
                 }
                 case WorldEventKind.Alarm: ApplyAlarm(m); break;
@@ -377,6 +378,94 @@ public static class WorldSync
         }
         FarSwitchesSent += near.Count;
         Plugin.Event($"WORLD {near.Count} switch(es) changed while no client was near: sent now that one is");
+    }
+
+    // --- room lighting behind a lamp's switch
+    //
+    // The game lights a room in NewRoom.SetMainLights (mainLightStatus, the light zones' area lights, emission) and
+    // NewRoom.SetSecondaryLight (emission, for lamps); those then set each lamp's and light switch's own switch.
+    // Interactable.SetSwitchState alone only lights the lamp. We sync the switches one by one, so a room's lamps
+    // followed the other machine while the room itself stayed as dark or bright as before (seen until 0.9.67).
+
+    /// <summary>interactable id → the room it lights, and whether as a main light / light switch (else a lamp).</summary>
+    static Dictionary<int, (NewRoom room, bool main)> _roomLights;
+
+    static void IndexRoomLights()
+    {
+        _roomLights = new Dictionary<int, (NewRoom room, bool main)>();
+        var rooms = CityData.Instance?.roomDirectory;
+        if (rooms == null) return;
+        for (int r = 0; r < rooms.Count; r++)
+        {
+            var room = rooms[r];
+            if (room == null) continue;
+            // Lamps first: a main light or light switch entry replaces them.
+            var sec = room.secondaryLights;
+            if (sec != null) for (int i = 0; i < sec.Count; i++) if (sec[i] != null) _roomLights[sec[i].id] = (room, false);
+            var main = room.mainLights;
+            if (main != null) for (int i = 0; i < main.Count; i++) if (main[i] != null) _roomLights[main[i].id] = (room, true);
+            var sw = room.lightswitchInteractables;
+            if (sw != null) for (int i = 0; i < sw.Count; i++) if (sw[i] != null) _roomLights[sw[i].id] = (room, true);
+            var walls = room.lightswitches;
+            if (walls != null)
+                for (int i = 0; i < walls.Count; i++)
+                {
+                    var wsw = walls[i]?.lightswitchInteractable;
+                    if (wsw != null) _roomLights[wsw.id] = (room, true);
+                }
+        }
+    }
+
+    /// <summary>
+    /// After a switch from another machine was applied to <paramref name="it"/>: if it is one of a room's lights or
+    /// light switches, the room's own lighting follows. Call it while applying (nothing here is re-sent as ours).
+    /// </summary>
+    internal static void RoomLightsFollow(Interactable it, InteractablePreset.Switch which, bool val)
+    {
+        if (it == null || which != InteractablePreset.Switch.switchState) return;
+        try
+        {
+            if (_roomLights == null) IndexRoomLights();
+            if (!_roomLights.TryGetValue(it.id, out var e))
+            {
+                // Not in a room's lists when we indexed (a lamp placed since): its own room, by what it is.
+                var room = it.node?.room;
+                if (room == null || (!it.ml && it.isLight == null)) return;
+                e = (room, it.ml);
+            }
+            if (e.room == null) return;
+            if (e.main)
+            {
+                // Sets the room's other main lights and switches too; the sender's own events for those then find
+                // them already so.
+                if (e.room.mainLightStatus == val) return;
+                e.room.SetMainLights(val, "co-op: follows the other machine", null, false, false);
+                Plugin.Event($"WORLD room {e.room.roomID} main lights {(val ? "on" : "off")} with #{it.id} {it.name}");
+            }
+            else e.room.SetSecondaryLight(val, true); // forced: the lamp's switch is already set, so "changed?" says no
+        }
+        catch (Exception ex) { Plugin.Event($"WORLD room lights after switch #{it.id} failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Client: our own citizens don't light or darken rooms. These actions call NewRoom.SetMainLights / SetSecondaryLight
+    /// without an actor, so SwitchPrefix can't tell them from a player's flip: until 0.9.67 our citizens still switched
+    /// whole rooms here, and the host's lamp states then arrived on top of a room lit differently.
+    /// </summary>
+    [HarmonyPatch]
+    static class ClientCitizenRoomLights
+    {
+        static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+        {
+            foreach (var name in new[] { nameof(ActionController.TurnOnMainLight), nameof(ActionController.TurnOffMainLight),
+                                         nameof(ActionController.TurnOnSecondaryLight), nameof(ActionController.TurnOffSecondaryLight) })
+            {
+                var m = typeof(ActionController).GetMethod(name, new[] { typeof(Interactable), typeof(NewNode), typeof(Actor) });
+                if (m != null) yield return m;
+            }
+        }
+
+        static bool Prefix(Actor who) => _applying || !IsClient || !World.Ready || who == null || who.isPlayer;
     }
 
     [HarmonyPatch(typeof(Interactable), nameof(Interactable.SetSwitchState))]
