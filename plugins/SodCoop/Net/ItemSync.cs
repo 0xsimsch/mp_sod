@@ -374,8 +374,32 @@ public static class ItemSync
         {
             if (__instance.interactable == null || _applying) return;
             _touched.Add(__instance.interactable.id);
+            if (_attacker != null)
+            {
+                // A citizen's attack scattered it (see AiAttack): not ours. The citizen is the thrower, so a break
+                // doesn't make our player a vandal. Its resting place is still reported (Move), not a throw by us.
+                __instance.thrownBy = _attacker;
+                Plugin.Event($"ITEM #{__instance.interactable.id} knocked about by citizen {_attacker.humanID}'s attack (not our drop)");
+                return;
+            }
             _toThrow.Add((__instance, UnityEngine.Time.frameCount, throwThis));
         }
+    }
+
+    /// <summary>
+    /// The citizen whose <c>NewAIController.AttackUpdate</c> is running. That method knocks up to 7 objects around
+    /// with <c>DropThis</c> plus a random force (0xACA22D/0xACA28F), and DropThis is the player's: it calls
+    /// SetPhysics(true, Player.Instance). A break of one of those then ran BreakObject with our player as breaker
+    /// (isPlayer): vandalism fine and SetIllegalActionActive on us. Seen 0.9.76: citizen 30 fought the client, an
+    /// object flew off at 59.8 m/s, broke, and citizens next to the far-away host attacked the host.
+    /// </summary>
+    [ThreadStatic] static Human _attacker;
+
+    [HarmonyPatch(typeof(NewAIController), "AttackUpdate")]
+    static class AiAttack
+    {
+        static void Prefix(NewAIController __instance) => _attacker = __instance.human;
+        static void Finalizer() => _attacker = null; // also when AttackUpdate throws (no postfix then)
     }
 
     static readonly List<(InteractableController ctrl, int frame, bool thrown)> _toThrow = new();

@@ -77,6 +77,12 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.78: objects a citizen's attack knocks about aren't the host's (protocol v49, untested in game)
+
+- Seen (0.9.76): citizen 30 fought the client; `ITEM dropped #1090520130 at 59.8 m/s` on the host (the host did nothing and was far away), the object broke, `STATUS fine vandalism at address 67 is P1's`, and citizen 174 next to the host attacked the host at once.
+- Cause: `NewAIController.AttackUpdate` knocks up to 7 objects around with `InteractableController.DropThis` plus a random force. DropThis is the player's drop: it sets `thrownBy = Player.Instance`. A break then runs BreakObject with the host's player as breaker (`isPlayer`): vandalism fine and `SetIllegalActionActive(true)` on the host. The mod also reported it as the host's own drop.
+- `ItemSync.AiAttack`: while AttackUpdate runs, a dropped object gets the attacking citizen as `thrownBy` and is not reported as our throw (its resting place still is). Logged as `ITEM #… knocked about by citizen …'s attack`.
+
 ## 0.9.77: no "you passed out" spam while the partner stays awake (protocol v49, untested in game)
 
 - Seen: a KO'd player whose partner did not sleep/wait got "you passed out… you will wake up soon" over and over during the long normal-speed wait.
