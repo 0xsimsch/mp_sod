@@ -77,6 +77,10 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.75: hospital bed fix the other way round (protocol v49, untested in game)
+
+- Testing 0.9.74: the partner now lies along the hospital bed, but feet at the pillow. The bed-rotation yaw needs no +180: head goes to the end the furniture forward points at.
+
 ## 0.9.74: a partner lying on a hospital bed lies along it (protocol v49, untested in game)
 
 - Seen (0.9.73): on `BedHospital` the lying partner was turned 90° to the player's right, across the mattress. Log: `POSE seated on BedHospital: yaw=180 (look-at point, furniture yaw 90)` — the hospital bed's usage-point look-at is to the side of the bed, not along it. Normal beds' look-at runs along the mattress, so they were fine.

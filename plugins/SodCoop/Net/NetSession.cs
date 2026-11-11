@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.74";
+    public const string ModVersion = "0.9.75";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -572,7 +572,7 @@ public sealed class NetSession : IDisposable
     /// bottom when there's no usage point or it is implausibly far away. Logged once per seat.
     /// Lying: a hospital bed's look-at point is off to the side (seen 0.9.68: partner across the bed, look-at yaw 180
     /// vs bed at 90), so a look-at that doesn't run along the furniture's axis is replaced by the furniture's own
-    /// rotation, head to the end opposite its forward.
+    /// rotation, head to the end its forward points at.
     /// </summary>
     static void SeatPose(Player p, bool lying, ref Vec3 pos, ref float yaw)
     {
@@ -619,12 +619,11 @@ public sealed class NetSession : IDisposable
                     }
                     if (!alongBed)
                     {
-                        float bedYaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg + 180f;
-                        if (bedYaw > 180f) bedYaw -= 360f;
                         if (fwd.sqrMagnitude > 0.01f)
                         {
                             note = (note != null ? note + ", " : "") + "look-at not along the furniture: lying along its own rotation instead";
-                            _seatYaw = bedYaw;
+                            // Head to the end the furniture forward points at (0.9.74 had +180: feet ended up at the pillow).
+                            _seatYaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
                         }
                     }
                 }
