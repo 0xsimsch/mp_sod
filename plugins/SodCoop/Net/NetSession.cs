@@ -639,8 +639,12 @@ public sealed class NetSession : IDisposable
                             float along = Vector3.Dot(d, f);
                             var cross = d - f * along;
                             var hip = old + cross + f * (2.5f * along);
+                            // Log-only geometry: the hospital bed's main collider is a thin slab along the bed (its
+                            // box measures 0 on that axis), so the center is reported, not a span.
+                            var b = col.bounds;
                             note += $", hips {cross.magnitude:F2} m across and {(2.5f * along):F2} m along the bed " +
-                                    $"to the collider center ({along:F2} m x 2.5)";
+                                    $"to the collider center ({along:F2} m x 2.5): usage ({old.x:F2}|{old.z:F2}) -> " +
+                                    $"hips ({hip.x:F2}|{hip.z:F2}), center ({c.x:F2}|{c.z:F2}) box {b.size.x:F2}|{b.size.y:F2}|{b.size.z:F2}";
                             _seatPos = new Vector3(hip.x, old.y, hip.z);
                         }
                     }
