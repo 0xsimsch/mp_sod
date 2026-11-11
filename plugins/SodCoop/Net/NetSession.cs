@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.79";
+    public const string ModVersion = "0.9.80";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -573,7 +573,7 @@ public sealed class NetSession : IDisposable
     /// Lying: a hospital bed's usage setup is misauthored both ways (seen 0.9.68: partner across the bed, look-at yaw
     /// 180 vs bed at 90; 0.9.77: hips at the pillow's left corner). A look-at that doesn't run along the furniture's
     /// axis is replaced by the furniture's own rotation, head to the end its forward points at, and the hips go to the
-    /// main collider's center at the usage point's height.
+    /// main collider's center, 2.5 times the usage point's lift above the floor (the body would sink into the bed).
     /// </summary>
     static void SeatPose(Player p, bool lying, ref Vec3 pos, ref float yaw)
     {
@@ -631,8 +631,12 @@ public sealed class NetSession : IDisposable
                         {
                             var c = col.bounds.center;
                             var old = _seatPos.Value;
-                            note += $", hips {new Vector2(c.x - old.x, c.z - old.z).magnitude:F2} m to the collider center";
-                            _seatPos = new Vector3(c.x, old.y, c.z);
+                            // Testing 0.9.79: centered, but the body sank into the bed — the height the usage point
+                            // lifts above the floor has to be taken 2.5 times over (1.5 times more than the seat's).
+                            float lift = old.y - feet.Y;
+                            note += $", hips {new Vector2(c.x - old.x, c.z - old.z).magnitude:F2} m to the collider center, " +
+                                    $"lying {(2.5f * lift):F2} m over the floor ({lift:F2} x 2.5)";
+                            _seatPos = new Vector3(c.x, feet.Y + 2.5f * lift, c.z);
                         }
                     }
                 }

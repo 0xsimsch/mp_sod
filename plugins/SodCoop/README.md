@@ -77,6 +77,10 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.80: a partner on a hospital bed lies on top of it (protocol v49, untested in game)
+
+- Testing 0.9.79: hips centered now, but the body sat too low in the bed. The height the usage point lifts above the floor is taken 2.5 times over (the 1.5 times that were missing). Beds with a sane usage point and sitting unchanged; the seat log shows the lying height.
+
 ## 0.9.79: a partner lying on a hospital bed lies in the middle of it (protocol v49, untested in game)
 
 - Testing 0.9.75: the partner lies along the hospital bed now, but off to one side — body center at the pillow, hips on the left border (top view). The yaw fix showed the hospital bed's usage setup is misauthored: the usage point isn't the middle of the mattress either.
