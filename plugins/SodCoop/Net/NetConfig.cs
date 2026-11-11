@@ -13,6 +13,7 @@ public static class NetConfig
     public static ConfigEntry<ulong> JoinLobby;
     public static ConfigEntry<string> PlayerName;
     public static ConfigEntry<bool> VerboseLog;
+    public static ConfigEntry<float> FightSoundDistance;
 
     public static void Bind(ConfigFile cfg)
     {
@@ -25,6 +26,9 @@ public static class NetConfig
         PlayerName = cfg.Bind("Net", "PlayerName", "", "Name shown to others; empty = Steam name / \"Player\".");
         VerboseLog = cfg.Bind("Debug", "VerboseLog", false,
             "Write the developer diagnostics (perception DIAG dump every 3 s, PERF every 10 s) to BepInEx/sodcoop.log.");
+        FightSoundDistance = cfg.Bind("Sound", "FightSoundDistance", 15f,
+            "From how many metres away you hear another player's (and the host's citizens') punches and weapon impacts. " +
+            "0 = never, at most 60. Gunshots always carry 60 m. Read again at every session start (F11).");
     }
 
     public static NetSession StartFromConfig(int maxPlayers)

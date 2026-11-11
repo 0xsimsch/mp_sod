@@ -77,6 +77,11 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.72: hearing distance for relayed fight sounds (protocol v49, untested in game)
+
+- Seen: the host heard the client's punches from far away. Relayed fight sounds (`SoundSync`, 0.9.67) were played for everybody within 60 m.
+- New setting `[Sound] FightSoundDistance` in `BepInEx/config/mp_sod.coop.cfg`, default **15** m (0 = never, at most 60): punches and weapon impacts from another machine are only played within that distance of our player. It applies on the machine that hears, so each player sets their own. Weapon fire events (gunshots) keep 60 m; the 2D "you were hit" sound for the player who was hit is not limited.
+
 ## 0.9.71: witnesses of a trespassing client escalate (protocol v49, host side only, untested in game)
 
 - Seen: a citizen who catches the client trespassing tells it off, again and again, and never turns on it.

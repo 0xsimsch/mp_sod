@@ -27,7 +27,10 @@ namespace SodCoop.Net;
 public static class SoundSync
 {
     const byte KindOneShot = 1; // str event, vec3 position, float volume, byte hitPlayer (255 = nobody), str 2D event for that player
+    /// <summary>Weapon fire (gunshots) carries this far.</summary>
     const float MaxDistance = 60f;
+    /// <summary>Punches and impacts: <see cref="NetConfig.FightSoundDistance"/> (config), never beyond <see cref="MaxDistance"/>.</summary>
+    static float HitDistance => Mathf.Clamp(NetConfig.FightSoundDistance?.Value ?? 15f, 0f, MaxDistance);
     const int MaxPerSecond = 30;
 
     public static int Sent { get; private set; }
@@ -36,6 +39,7 @@ public static class SoundSync
     static readonly Dictionary<IntPtr, string> _relayed = new();       // event → its name
     static readonly Dictionary<IntPtr, string> _playerImpact = new();   // impactEvent → the same weapon's impactEventPlayer
     static readonly Dictionary<string, AudioEvent> _byName = new();
+    static readonly HashSet<string> _fire = new();                      // names of the weapons' fire events
     static bool _built, _applying, _failLogged;
     static float _windowStart;
     static int _inWindow, _dropped;
@@ -45,7 +49,7 @@ public static class SoundSync
     public static void Reset()
     {
         _built = false;
-        _relayed.Clear(); _playerImpact.Clear(); _byName.Clear();
+        _relayed.Clear(); _playerImpact.Clear(); _byName.Clear(); _fire.Clear();
         _dropped = 0;
     }
 
@@ -80,6 +84,7 @@ public static class SoundSync
                 if (w == null) continue;
                 weapons++;
                 Add(w.fireEvent); Add(w.impactEvent); Add(w.impactEventBody);
+                if (w.fireEvent != null && !string.IsNullOrEmpty(w.fireEvent.name)) _fire.Add(w.fireEvent.name);
                 if (w.impactEventPlayer != null)
                 {
                     string pn = w.impactEventPlayer.name;
@@ -159,7 +164,9 @@ public static class SoundSync
         if (float.IsNaN(volume) || volume <= 0f || volume > 4f) volume = 1f;
 
         bool hitMe = hit != 255 && PlayerRegistry.Local != null && PlayerRegistry.Local.Id.Value == hit;
-        if (!hitMe && Vector3.Distance(me.transform.position, pos) > MaxDistance) return;
+        // Another player's punches and impacts were audible from 60 m (seen: the host heard the client's hits from
+        // far off); only gunshots keep that range.
+        if (!hitMe && Vector3.Distance(me.transform.position, pos) > (_fire.Contains(name) ? MaxDistance : HitDistance)) return;
         if (!_byName.TryGetValue(name, out var ev) || ev == null)
         {
             if (!_failLogged) { _failLogged = true; Plugin.Event($"SOUND unknown event \"{name}\": not played"); }
