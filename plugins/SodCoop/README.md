@@ -77,6 +77,11 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.74: a partner lying on a hospital bed lies along it (protocol v49, untested in game)
+
+- Seen (0.9.73): on `BedHospital` the lying partner was turned 90° to the player's right, across the mattress. Log: `POSE seated on BedHospital: yaw=180 (look-at point, furniture yaw 90)` — the hospital bed's usage-point look-at is to the side of the bed, not along it. Normal beds' look-at runs along the mattress, so they were fine.
+- `SeatPose`: while lying, a look-at direction that doesn't run along the furniture's axis (|dot| ≤ 0.7) is replaced by the furniture's own rotation, head to the end opposite its forward. Beds whose look-at agrees keep it; sitting is unchanged. The seat log now says "look-at not along the furniture" when the bed rotation was used instead.
+
 ## 0.9.73: the fight sound distance applies on the host only (protocol v49, untested in game)
 
 - 0.9.72 limited relayed punches and impacts on every machine. Testing had shown that what a client hears of the host's fights was fine, so `FightSoundDistance` now only limits what the **host** hears of a client's hits. A client hears everything within 60 m as before 0.9.72.

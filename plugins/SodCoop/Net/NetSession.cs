@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.73";
+    public const string ModVersion = "0.9.74";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -473,7 +473,7 @@ public sealed class NetSession : IDisposable
         msg.Flags |= SeatedFlags(p, msg.Position.Y);
         if ((msg.Flags & (PoseFlags.PlayerSitting | PoseFlags.PlayerLying)) != 0)
         {
-            SeatPose(p, ref msg.Position, ref msg.Yaw);
+            SeatPose(p, (msg.Flags & PoseFlags.PlayerLying) != 0, ref msg.Position, ref msg.Yaw);
             msg.Flags &= ~PoseFlags.Crouched; // sat down from a crouch: the game keeps isCrouched, the body is seated
         }
         else _seatYawFor = _seatLoggedFor = -1;
@@ -570,8 +570,11 @@ public sealed class NetSession : IDisposable
     /// facing the usage point's look-at point. Mouse look turns the player's body yaw, but a seated body must stay put:
     /// without a look-at point the yaw is frozen at what it was when the player sat down. Falls back to the capsule
     /// bottom when there's no usage point or it is implausibly far away. Logged once per seat.
+    /// Lying: a hospital bed's look-at point is off to the side (seen 0.9.68: partner across the bed, look-at yaw 180
+    /// vs bed at 90), so a look-at that doesn't run along the furniture's axis is replaced by the furniture's own
+    /// rotation, head to the end opposite its forward.
     /// </summary>
-    static void SeatPose(Player p, ref Vec3 pos, ref float yaw)
+    static void SeatPose(Player p, bool lying, ref Vec3 pos, ref float yaw)
     {
         var feet = pos;
         Interactable seat = null;
@@ -603,6 +606,28 @@ public sealed class NetSession : IDisposable
                     }
                 }
                 _seatYaw = look.HasValue ? Mathf.Atan2(look.Value.x - _seatPos.Value.x, look.Value.z - _seatPos.Value.z) * Mathf.Rad2Deg : yaw;
+                if (lying && seat?.controller != null)
+                {
+                    var fwd = seat.controller.transform.forward;
+                    fwd.y = 0f;
+                    bool alongBed = false;
+                    if (look.HasValue && fwd.sqrMagnitude > 0.01f)
+                    {
+                        var d = look.Value - _seatPos.Value;
+                        d.y = 0f;
+                        alongBed = d.sqrMagnitude > 0.01f && Mathf.Abs(Vector3.Dot(d.normalized, fwd.normalized)) > 0.7f;
+                    }
+                    if (!alongBed)
+                    {
+                        float bedYaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg + 180f;
+                        if (bedYaw > 180f) bedYaw -= 360f;
+                        if (fwd.sqrMagnitude > 0.01f)
+                        {
+                            note = (note != null ? note + ", " : "") + "look-at not along the furniture: lying along its own rotation instead";
+                            _seatYaw = bedYaw;
+                        }
+                    }
+                }
                 _seatLoggedFor = -1; // log this decision
             }
             use = _seatPos;
