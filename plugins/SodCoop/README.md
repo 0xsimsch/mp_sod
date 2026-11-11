@@ -77,6 +77,10 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.73: the fight sound distance applies on the host only (protocol v49, untested in game)
+
+- 0.9.72 limited relayed punches and impacts on every machine. Testing had shown that what a client hears of the host's fights was fine, so `FightSoundDistance` now only limits what the **host** hears of a client's hits. A client hears everything within 60 m as before 0.9.72.
+
 ## 0.9.72: hearing distance for relayed fight sounds (protocol v49, untested in game)
 
 - Seen: the host heard the client's punches from far away. Relayed fight sounds (`SoundSync`, 0.9.67) were played for everybody within 60 m.

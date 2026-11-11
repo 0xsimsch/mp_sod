@@ -166,7 +166,9 @@ public static class SoundSync
         bool hitMe = hit != 255 && PlayerRegistry.Local != null && PlayerRegistry.Local.Id.Value == hit;
         // Another player's punches and impacts were audible from 60 m (seen: the host heard the client's hits from
         // far off); only gunshots keep that range.
-        if (!hitMe && Vector3.Distance(me.transform.position, pos) > (_fire.Contains(name) ? MaxDistance : HitDistance)) return;
+        // Host only (the sound is a client's own hit): a client hears the host's fights as before, that was fine.
+        bool limited = s.Role == NetSession.SessionRole.Host && !_fire.Contains(name);
+        if (!hitMe && Vector3.Distance(me.transform.position, pos) > (limited ? HitDistance : MaxDistance)) return;
         if (!_byName.TryGetValue(name, out var ev) || ev == null)
         {
             if (!_failLogged) { _failLogged = true; Plugin.Event($"SOUND unknown event \"{name}\": not played"); }
