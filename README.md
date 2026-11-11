@@ -21,7 +21,9 @@ Story mode isn't supported (a warning is shown). Apartments and decor, witness m
 
 ## Install and play
 
-You need BepInEx 6 (IL2CPP, bleeding edge) in the game folder, plus `SodCoop.dll` in `BepInEx/plugins`. `python3 -I plugins/SodCoop/bundle/make_bundle.py` builds a ready-to-unzip package from a working install. Its player instructions are in [`plugins/SodCoop/bundle/FRIEND_README.txt`](plugins/SodCoop/bundle/FRIEND_README.txt). `python3 -I plugins/SodCoop/bundle/make_thunderstore.py` builds the Thunderstore package of the same version (mod-manager install, BepInExPack as a dependency).
+You need BepInEx 6 (IL2CPP, bleeding edge) in the game folder, plus `SodCoop.dll` in `BepInEx/plugins`. `python3 -I plugins/SodCoop/bundle/make_bundle.py` builds a ready-to-unzip package from a working install. Its player instructions are in [`plugins/SodCoop/bundle/FRIEND_README.txt`](plugins/SodCoop/bundle/FRIEND_README.txt). `python3 -I plugins/SodCoop/bundle/make_thunderstore.py` builds the Thunderstore package of the same version (mod-manager install, BepInExPack as a dependency). `python3 -I plugins/SodCoop/bundle/make_workshop.py` builds the Steam Workshop item (bundled loader + bootstrap scripts for Windows and Linux/Proton; the game's official workshop loader only reads data, so the code rides along and a Steam launch option installs it — see `plugins/SodCoop/bundle/workshop/ITEM_PAGE.bbcode`). Upload both are manual; store icon: [`plugins/SodCoop/Assets/doubt-together-icon-256.png`](plugins/SodCoop/Assets/doubt-together-icon-256.png).
+
+Dev-machine rule in the workshop era: keep your own workshop item **unsubscribed** while developing, or the bootstrap reinstalls the subscribed (old) DLL over your `game/BepInEx/plugins` copy on every start and you chase ghosts.
 
 On Linux/Proton, set the launch option `WINEDLLOVERRIDES="winhttp=n,b" %command%`.
 

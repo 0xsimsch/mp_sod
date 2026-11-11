@@ -77,11 +77,12 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
-## 0.9.82: Doubt Together (Co-op) — GPL license and Thunderstore packaging (protocol v49, no mod change)
+## 0.9.82: Doubt Together (Co-op) — GPL license, Thunderstore and Steam Workshop packaging (protocol v49, no mod change)
 
 - The mod publishes under GPL-3.0-or-later: LICENSE in the repository, metadata in the project file, LICENSE.txt inside every built package.
 - Public display name: **Doubt Together (Co-op)**. Code, plugin GUID, log names and the manual bundle stay SodCoop.
 - `plugins/SodCoop/bundle/make_thunderstore.py` builds the Thunderstore zip: manifest with the name, the ModVersion, a BepInExPack_IL2CPP dependency and the player-facing page text (`THUNDERSTORE_README.md`). The version bump only keeps the package version equal to ModVersion, which both players must match.
+- `plugins/SodCoop/bundle/make_workshop.py` builds the Steam Workshop item: `ModSettings.txt` in the format the game reads (fields confirmed against the binary's `ModSettingsData`: version/loadOrderValue/enabled/modSource/workshopTags) to appear in the Mods menu, plus `SoDCoop.cmd`/`SoDCoop.sh` bootstraps that install the bundled BepInEx loader (create-if-missing, so an existing mod manager setup survives) and only remove their own files when the in-game toggle writes `"enabled": false`. One Steam launch option per OS (the item page carries both — Linux/Proton/Deck included, unlike the Windows-only competitor). Third-party loader licenses in `ThirdParty/`. The Linux leg is round-trip tested (install, WINEDLLOVERRIDES, toggle-off, reinstall, wrong-folder guard).
 
 ## 0.9.81: the 2.5 times is along the bed, not up (protocol v49, seat tested; partner view untested)
 

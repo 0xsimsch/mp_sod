@@ -1,0 +1,28 @@
+Doubt Together (Co-op) - launch options
+=======================================
+
+Steam > Shadows of Doubt > right click > Properties > Launch options.
+Paste ONE line - the one for your system (Steam has separate fields per OS, so you can
+keep both there and tick the right checkbox). Replace <ITEM_ID> with this item's id,
+the number in this item's page URL (workshop/item/?id=...).
+
+Windows:
+
+"..\..\workshop\content\986130\__ITEM_ID__\SoDCoop.cmd" & %command%
+
+Linux / Steam Play (Proton) / Steam Deck:
+
+sh "../../workshop/content/986130/__ITEM_ID__/SoDCoop.sh"; %command%
+
+How it works: Steam runs the script first, from the game folder. The script installs the
+bundled BepInEx + Doubt Together into the game folder (creating files only where nothing
+is there yet - an existing mod manager setup is left alone) and then lets Steam start the
+game. In the in-game Mods menu you can switch "Doubt Together (Co-op)" off: on the next
+start the script removes the files it had installed and the game launches without the mod.
+
+The FIRST start after subscribing takes a few minutes longer (dark window, maybe no
+mouse): the loader prepares itself for this game version. Let it finish once.
+
+To uninstall: switch the mod off in the in-game Mods menu and start once - that removes
+the loader files and the mod from the game folder. Then unsubscribe and clear the launch
+option. (BepInEx cache folders may remain and do nothing on their own.)

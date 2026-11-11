@@ -21,3 +21,7 @@ probe_results/save_backup/
 
 # outputs of analysis/*.py (regenerate from the game binary)
 analysis/out/
+
+# Krita working files
+*.kra
+*-autosave.kra

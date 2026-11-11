@@ -1,0 +1,10 @@
+{
+    "name": "Doubt Together (Co-op)",
+    "summary": "Two-player co-op over Steam: host your city, a friend joins it, same cases same clock.",
+    "creator": "simsch",
+    "version": "__VERSION__",
+    "loadOrderValue": 100,
+    "enabled": true,
+    "modSource": "local",
+    "workshopTags": ["Co-op", "Multiplayer", "PvE"]
+}
