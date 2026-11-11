@@ -77,6 +77,11 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.79: a partner lying on a hospital bed lies in the middle of it (protocol v49, untested in game)
+
+- Testing 0.9.75: the partner lies along the hospital bed now, but off to one side — body center at the pillow, hips on the left border (top view). The yaw fix showed the hospital bed's usage setup is misauthored: the usage point isn't the middle of the mattress either.
+- `SeatPose`: in the same "look-at not along the furniture" case, the hips move to the center of the bed's main collider (`InteractableController.coll`, horizontal center of the whole bed) at the usage point's height, which is the mattress top. Beds whose usage point is fine, and sitting, are untouched. The seat log appends "hips X m to the collider center".
+
 ## 0.9.78: objects a citizen's attack knocks about aren't the host's (protocol v49, untested in game)
 
 - Seen (0.9.76): citizen 30 fought the client; `ITEM dropped #1090520130 at 59.8 m/s` on the host (the host did nothing and was far away), the object broke, `STATUS fine vandalism at address 67 is P1's`, and citizen 174 next to the host attacked the host at once.

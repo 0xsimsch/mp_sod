@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.78";
+    public const string ModVersion = "0.9.79";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -570,9 +570,10 @@ public sealed class NetSession : IDisposable
     /// facing the usage point's look-at point. Mouse look turns the player's body yaw, but a seated body must stay put:
     /// without a look-at point the yaw is frozen at what it was when the player sat down. Falls back to the capsule
     /// bottom when there's no usage point or it is implausibly far away. Logged once per seat.
-    /// Lying: a hospital bed's look-at point is off to the side (seen 0.9.68: partner across the bed, look-at yaw 180
-    /// vs bed at 90), so a look-at that doesn't run along the furniture's axis is replaced by the furniture's own
-    /// rotation, head to the end its forward points at.
+    /// Lying: a hospital bed's usage setup is misauthored both ways (seen 0.9.68: partner across the bed, look-at yaw
+    /// 180 vs bed at 90; 0.9.77: hips at the pillow's left corner). A look-at that doesn't run along the furniture's
+    /// axis is replaced by the furniture's own rotation, head to the end its forward points at, and the hips go to the
+    /// main collider's center at the usage point's height.
     /// </summary>
     static void SeatPose(Player p, bool lying, ref Vec3 pos, ref float yaw)
     {
@@ -617,13 +618,21 @@ public sealed class NetSession : IDisposable
                         d.y = 0f;
                         alongBed = d.sqrMagnitude > 0.01f && Mathf.Abs(Vector3.Dot(d.normalized, fwd.normalized)) > 0.7f;
                     }
-                    if (!alongBed)
+                    if (!alongBed && fwd.sqrMagnitude > 0.01f)
                     {
-                        if (fwd.sqrMagnitude > 0.01f)
+                        note = (note != null ? note + ", " : "") + "look-at not along the furniture: lying along its own rotation instead";
+                        // Head to the end the furniture forward points at (0.9.74 had +180: feet ended up at the pillow).
+                        _seatYaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
+                        // Same misauthored usage setup: the usage point isn't the mattress middle either (0.9.77
+                        // report: hips at the pillow's left corner). The bed's main collider center is; keep the
+                        // usage point's height (mattress top). Without a usage point ("too far") the capsule stays.
+                        var col = seat.controller.coll;
+                        if (col != null && _seatPos.HasValue)
                         {
-                            note = (note != null ? note + ", " : "") + "look-at not along the furniture: lying along its own rotation instead";
-                            // Head to the end the furniture forward points at (0.9.74 had +180: feet ended up at the pillow).
-                            _seatYaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
+                            var c = col.bounds.center;
+                            var old = _seatPos.Value;
+                            note += $", hips {new Vector2(c.x - old.x, c.z - old.z).magnitude:F2} m to the collider center";
+                            _seatPos = new Vector3(c.x, old.y, c.z);
                         }
                     }
                 }
