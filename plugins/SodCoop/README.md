@@ -77,6 +77,12 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.76: another player's throw breaking something doesn't make us a criminal (protocol v49, untested in game)
+
+- Seen (0.9.74): the client threw things around while trespassing; as soon as an object broke, citizens near the host (in a neutral place, another building) saw the **host** doing something illegal and attacked it. Log: `STATUS fine vandalism at address 46 is P1's` followed by `SEES-ILLEGAL observer=citizen 122 target=P0 "Host"`.
+- Cause: the replayed throw breaks the object on the host too, with the client's body as breaker. `InteractableController.BreakObject` (0x97E751) ends with `InteractionController.SetIllegalActionActive(true)`, and that singleton is the local player. Same the other way round: the host's throws breaking things on a client flagged the client.
+- `ItemSync.RemoteBreak`/`NotOurIllegalAction`: while BreakObject runs for a remote player's body, `SetIllegalActionActive(true)` is skipped. The breaker's own machine breaks the object as well and reports its illegal action as before. Vandalism and fines are unchanged.
+
 ## 0.9.75: hospital bed fix the other way round (protocol v49, untested in game)
 
 - Testing 0.9.74: the partner now lies along the hospital bed, but feet at the pillow. The bed-rotation yaw needs no +180: head goes to the end the furniture forward points at.

@@ -337,6 +337,33 @@ public static class ItemSync
     static class Carry { static void Postfix(InteractableController __instance) { if (__instance.interactable != null) { _touched.Add(__instance.interactable.id); _remoteThrown.Remove(__instance.interactable.id); } } }
 
     /// <summary>
+    /// Inside a BreakObject whose breaker is another player's body. The game's BreakObject (0x97E751) ends with
+    /// <c>InteractionController.SetIllegalActionActive(true)</c> after the vandalism fine. That singleton is OUR
+    /// player: a client's throw breaking something on the host made the host a criminal wherever it stood, and
+    /// citizens next to the host attacked it (seen in 0.9.74). The breaker's own machine breaks the object too and
+    /// reports its own illegal action, so here it is dropped.
+    /// </summary>
+    [ThreadStatic] static bool _remoteBreak;
+
+    [HarmonyPatch(typeof(InteractableController), nameof(InteractableController.BreakObject))]
+    static class RemoteBreak
+    {
+        static void Prefix(Actor breaker) => _remoteBreak = PlayerRegistry.IsRemoteBody(breaker);
+        static void Finalizer() => _remoteBreak = false; // also when BreakObject throws (no postfix then)
+    }
+
+    [HarmonyPatch(typeof(InteractionController), nameof(InteractionController.SetIllegalActionActive))]
+    static class NotOurIllegalAction
+    {
+        static bool Prefix(bool val)
+        {
+            if (!val || !_remoteBreak) return true;
+            Plugin.Event("ITEM another player's throw broke something: not our illegal action");
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Our player let go of a carried object (thrown or dropped): send its start and velocity so it flies the same arc
     /// elsewhere. The throw force goes through physics, so the velocity is read on the next frame (<see cref="Tick"/>).
     /// </summary>
