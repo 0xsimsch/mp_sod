@@ -46,7 +46,6 @@ public static class CaseSync
         if (TryApply(m))
         {
             Applied++;
-            if (m.Kind == CaseEventKind.EvidenceFound) NoteEvidence(m.ByPlayer);
             return;
         }
         Unknown++;
@@ -56,36 +55,18 @@ public static class CaseSync
             Plugin.Event($"CASE waiting: {m.Kind} for '{m.Id}' (from P{m.ByPlayer}) doesn't exist here yet");
     }
 
-    // "X found new evidence" fired up to 16 times in a few minutes: group it, at most once per 15 s per player.
-    const float EvidenceNoticeWindow = 15f;
-    static readonly Dictionary<byte, (int count, float firstAt)> _evidenceNotices = new();
-
-    static void NoteEvidence(byte byPlayer)
-    {
-        _evidenceNotices[byPlayer] = _evidenceNotices.TryGetValue(byPlayer, out var e)
-            ? (e.count + 1, e.firstAt) : (1, UnityEngine.Time.unscaledTime);
-    }
-
-    /// <summary>Per frame: show grouped evidence notices.</summary>
+    /// <summary>
+    /// Per frame: retry waiting events. An item's evidence can become creatable once its room loads here.
+    /// (The old "X found new evidence" notices were removed: they fired too often to be useful.)
+    /// </summary>
     static float _nextRetry;
 
-    public static void FlushNotices()
+    public static void Tick()
     {
-        // Also retry waiting events now and then: an item's evidence can become creatable once its room loads here.
         if (_pending.Count > 0 && UnityEngine.Time.unscaledTime >= _nextRetry)
         {
             _nextRetry = UnityEngine.Time.unscaledTime + 5f;
             RetryPending();
-        }
-        if (_evidenceNotices.Count == 0) return;
-        float now = UnityEngine.Time.unscaledTime;
-        foreach (var by in new List<byte>(_evidenceNotices.Keys))
-        {
-            var (count, firstAt) = _evidenceNotices[by];
-            if (now - firstAt < EvidenceNoticeWindow && count < 10) continue;
-            _evidenceNotices.Remove(by);
-            Notify.Show(count == 1 ? $"{Notify.NameOf(by)} found new evidence" : $"{Notify.NameOf(by)} found {count} new pieces of evidence",
-                InterfaceControls.Icon.lookingGlass);
         }
     }
 

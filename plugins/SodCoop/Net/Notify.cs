@@ -5,8 +5,9 @@ using SodCoop.Core;
 namespace SodCoop.Net;
 
 /// <summary>
-/// In-game messages about the partner ("Hunter99 found new evidence", "… was knocked out", "case solved by …"),
+/// In-game messages about the partner ("… was knocked out", "case solved by …"),
 /// shown with the game's own message feed (<c>InterfaceController.NewGameMessage</c>, type notification).
+/// Deliberately not used for evidence finds: too frequent to be useful (removed in CaseSync).
 /// Local events call <see cref="Show"/> on the receiving machine directly from existing receive paths; free-form
 /// notices from another machine travel as MsgType 42 (host relays).
 /// </summary>

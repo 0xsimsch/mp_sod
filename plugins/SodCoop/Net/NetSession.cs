@@ -24,7 +24,7 @@ public sealed class NetSession : IDisposable
     const float PoseInterval = 0.05f;     // 20 Hz
     const float HelloInterval = 1f;
     const float Timeout = 10f;
-    public const string ModVersion = "0.9.69";
+    public const string ModVersion = "0.9.70";
 
     readonly ITransport _transport;
     readonly SteamLobby _lobby;
@@ -348,7 +348,7 @@ public sealed class NetSession : IDisposable
             JobSync.Flush(now, (type, json) => Broadcast(Protocol.JobRecord(type, json), true));
             ObjectiveSync.Tick(now);
             if (Role == SessionRole.Host) TalkSync.HostTick(now);
-            CaseSync.FlushNotices();
+            CaseSync.Tick();
             BloodSync.Tick(now);
             RestSync.Tick(now, _playerOf.Values);
             if (Role == SessionRole.Client) Profiles.Tick(now);

@@ -77,6 +77,10 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.70: the two 0.9.68 lines merged (protocol v49)
+
+- Two machines each built a 0.9.68: the released one (no more "found evidence" notices) and a local one (room lighting), followed by a local 0.9.69 (giving items). This version has all three; nothing else changed. The release tagged v0.9.68 is the notices one; the lighting 0.9.68 and 0.9.69 were never released on their own.
+
 ## 0.9.69: giving an item to another player (protocol v49, new item event 7, untested in game)
 
 - How: the game's own "give" (item in hand, look at the partner's body within reach, the give action). From the binary: the action's availability `giveItem` (`FirstPersonItemController.UpdateCurrentActions`, 0xc) only wants a living, not stunned, not sleeping actor, so it is offered on a player's body too; `FirstPersonItemController.Give` (0x6e8870) then calls `Human.TryGiveItem(item, Player, true, true)` (0x79ea40) on it.
@@ -85,13 +89,18 @@ From the first real tests with a friend (protocol v23):
 - Limits: `PickUpItem` runs the game's own "is taking this illegal here" check on the receiver, so a gift taken inside somebody's home may count like picking it up there. Both machines need 0.9.69; an older receiver ignores the event and the item stays "with its body" (lost until reload).
 - `Give` may be reached from the first-person arm's animation; if the game dies on giving, put `GiveToPlayer` into `BepInEx/sodcoop_skip_patches`.
 
-## 0.9.68: a room's lighting follows its synced lamps (protocol v49, untested in game)
+## 0.9.68 (second line, first released in 0.9.70): a room's lighting follows its synced lamps (protocol v49, untested in game)
 
 - Seen: on the other machine a room's lamps switched with the partner's, but the room stayed as dark (or bright) as before.
 - Cause, from the binary: a room is lit by `NewRoom.SetMainLights` (0x84c980: `mainLightStatus`, the light zones' area lights `SetActive`, emission) and `NewRoom.SetSecondaryLight` (0x84e690: `UpdateEmissionEndOfFrame` for the room and its `commonRooms`). Only `ActionController.TurnOn/OffMainLight` / `TurnOn/OffSecondaryLight` call them; they then set each lamp and light switch with `Interactable.SetSwitchState`, which lights that lamp only. `ItemSync` and `WorldSync` apply remote flips with `SetSwtichByType` per interactable, so the room part never ran.
 - Fix: `WorldSync.RoomLightsFollow` after every applied switch (`ITEM` and `WORLD`). Main light or light switch (indexed once from `roomDirectory`: `mainLights`, `lightswitchInteractables`, `lightswitches[].lightswitchInteractable`) and `mainLightStatus` differs → `SetMainLights(val)`; logged as `WORLD room N main lights on/off with #id`. Lamp (`secondaryLights`) → `SetSecondaryLight(val, forceUpdate: true)`.
 - Also: those four actions pass no actor on to the room, so the 0.9.61 rule "a client's own citizens don't flip switches" never covered room lights; a client's citizens kept lighting whole rooms locally. They are skipped on a client for a non-player actor now (`ClientCitizenRoomLights`; to turn off: `BepInEx/sodcoop_skip_patches`).
 - Limit: TVs (they also call `SetSecondaryLight`) are not handled. Both machines should have 0.9.68; the messages are unchanged.
+
+## 0.9.68: no more "found evidence" notices (protocol v49, untested in game)
+
+- Seen in game: "X found new evidence" came up constantly. Every piece of evidence the partner finds sends a case event, so during a searched flat it fired again and again even after grouping (0.9.x: one notice per 15 s per player). It adds nothing while searching.
+- Removed the notice: `CaseSync.Apply` no longer counts `EvidenceFound`, the grouping (`NoteEvidence`) and the flush are gone; `CaseSync.FlushNotices` became `CaseSync.Tick` and only retries waiting case events. Evidence and facts still sync exactly as before; the other partner notices (join/leave, knocked out, objectives, case hand-in and solved, jobs, resting) are untouched.
 
 ## 0.9.67: fight sounds on every machine (protocol v49, new message 57, untested in game)
 
