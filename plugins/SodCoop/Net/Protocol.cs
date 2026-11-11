@@ -326,6 +326,8 @@ public enum ItemEventKind : byte
     Switch = 5,
     /// <summary>Thrown or dropped by a player: Position/Euler = start, Velocity/Spin = rigidbody state. The resting place follows as a Move.</summary>
     Throw = 6,
+    /// <summary>A player handed it to another player (the game's "give" on that player's body): Holder = the receiving player's id. That player's machine puts it into its inventory and reports that as IntoInventory.</summary>
+    Give = 7,
 }
 
 public struct ItemMsg

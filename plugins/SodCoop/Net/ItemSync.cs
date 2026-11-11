@@ -97,6 +97,7 @@ public static class ItemSync
             if (m.Kind == ItemEventKind.Switch) Plugin.Event($"ITEM switch #{m.Id} from P{m.ByPlayer}: no such object here");
             return;
         }
+        bool gift = false;
         _applying = true;
         try
         {
@@ -152,11 +153,104 @@ public static class ItemSync
                     WorldSync.RoomLightsFollow(it, (InteractablePreset.Switch)m.Holder, m.HolderIsPlayer);
                     Plugin.Event($"ITEM switch #{m.Id} {it.name} {(InteractablePreset.Switch)m.Holder}={m.HolderIsPlayer} from P{m.ByPlayer} applied");
                     break;
+                case ItemEventKind.Give:
+                    if (PlayerRegistry.Local != null && PlayerRegistry.Local.Id.Value == m.Holder) { gift = true; break; } // ours: below
+                    // Somebody else's: it is with that player's body until its own pickup (or drop) report arrives.
+                    var to = PlayerRegistry.TryGet(new PlayerId((byte)m.Holder), out var tp2) ? tp2.Body : null;
+                    if (to != null) it.SetInInventory(to);
+                    break;
             }
             Applied++;
         }
         catch (Exception e) { Plugin.Event($"ITEM {m.Kind} #{m.Id} failed: {e.Message}"); }
         finally { _applying = false; }
+        // Not while applying: taking it is our own player's action, reported like any pickup.
+        if (gift) ReceiveGift(it, m.ByPlayer);
+    }
+
+    // --- giving: the game's "give" (item in hand, looking at somebody) on another player's body.
+
+    /// <summary>
+    /// The game's give hands the object to the citizen the body was borrowed from: it lands in that citizen's
+    /// inventory (on the other machine: "held by the player" without an inventory slot, so it was gone), the citizen
+    /// answers, eats or drinks it, or takes it as a lost-and-found return. For a player's body the object goes to
+    /// that player's machine instead, which puts it into its first-person inventory.
+    /// </summary>
+    [HarmonyPatch(typeof(Human), nameof(Human.TryGiveItem))]
+    static class GiveToPlayer
+    {
+        static bool Prefix(Human __instance, Interactable givenItem, Human givenBy, ref bool __result)
+        {
+            var s = NetSession.Current;
+            if (s == null || !World.Ready || _applying || __instance == null) return true;
+            var partner = PlayerRegistry.RemoteOwnerOf(__instance);
+            if (partner == null) return true;
+            __result = false;
+            try
+            {
+                if (givenItem == null || !IsLocal(givenBy) || PlayerRegistry.Local == null) return false;
+                var fpc = FirstPersonItemController.Instance;
+                FirstPersonItemController.InventorySlot slot = null;
+                if (fpc?.slots != null)
+                    for (int i = 0; i < fpc.slots.Count && slot == null; i++)
+                    {
+                        var sl = fpc.slots[i];
+                        if (sl != null && sl.interactableID == givenItem.id && sl.GetInteractable()?.id == givenItem.id) slot = sl;
+                    }
+                if (slot == null) { Plugin.Event($"ITEM give #{givenItem.id} {givenItem.name} to {partner.Id}: not in one of our slots"); return false; }
+                string name = givenItem.GetName();
+                // As the game's own give does (EmptySlot, then into the receiver's inventory), but unreported: the
+                // Give message says it all, and the put-down in between isn't one.
+                using (Suppress())
+                {
+                    fpc.EmptySlot(slot, false, false, true, true);
+                    givenItem.SetInInventory(__instance);
+                }
+                var at = givenItem.wPos;
+                s.SendItem(new ItemMsg
+                {
+                    ByPlayer = PlayerRegistry.Local.Id.Value, Kind = ItemEventKind.Give, Id = givenItem.id,
+                    Holder = partner.Id.Value, HolderIsPlayer = true, Position = new Vec3(at.x, at.y, at.z),
+                });
+                Sent++;
+                __result = true;
+                Notify.Show($"Gave {name} to {partner.DisplayName}", InterfaceControls.Icon.hand);
+                Plugin.Event($"ITEM gave #{givenItem.id} {givenItem.name} to {partner.Id}");
+            }
+            catch (Exception e) { Plugin.Event($"ITEM give to {partner.Id} failed: {e.Message}"); }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Another player gave us this: into our inventory. Without a free slot it is put down at our feet. Both are our
+    /// own player's actions here, so the usual reports tell everyone where it went.
+    /// </summary>
+    static void ReceiveGift(Interactable it, byte from)
+    {
+        try
+        {
+            var me = Player.Instance;
+            var fpc = FirstPersonItemController.Instance;
+            if (me == null || fpc == null || it == null) return;
+            string name = it.GetName();
+            string giver = Notify.NameOf(from);
+            if (fpc.PickUpItem(it, false, false, false, false, true))
+            {
+                Notify.Show($"{giver} gave you {name}", InterfaceControls.Icon.hand);
+                Plugin.Event($"ITEM #{it.id} {it.name} given to us by P{from}: in our inventory");
+                return;
+            }
+            // Ours first (so every machine, a client's reach check included, takes the next two as our own), then down.
+            it.SetInInventory(me);
+            var node = me.currentNode ?? Toolbox.Instance.FindClosestValidNodeToWorldPosition(me.transform.position, false, true, false, default, false, 0, false, 200);
+            it.SetAsNotInventory(node);
+            var fwd = me.transform.forward; fwd.y = 0f;
+            it.MoveInteractable(me.transform.position + fwd.normalized * 0.4f, Vector3.zero, true);
+            Notify.Show($"{giver} gave you {name}, but your inventory is full: it's at your feet", InterfaceControls.Icon.hand);
+            Plugin.Event($"ITEM #{it.id} {it.name} given to us by P{from}: no free slot, put down at our feet");
+        }
+        catch (Exception e) { Plugin.Event($"ITEM #{it?.id} given by P{from}: taking it failed: {e.Message}"); }
     }
 
     /// <summary>Objects another player threw here (replayed throws): their owner's machine decides what they do.</summary>

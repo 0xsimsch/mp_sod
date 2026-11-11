@@ -77,6 +77,14 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.69: giving an item to another player (protocol v49, new item event 7, untested in game)
+
+- How: the game's own "give" (item in hand, look at the partner's body within reach, the give action). From the binary: the action's availability `giveItem` (`FirstPersonItemController.UpdateCurrentActions`, 0xc) only wants a living, not stunned, not sleeping actor, so it is offered on a player's body too; `FirstPersonItemController.Give` (0x6e8870) then calls `Human.TryGiveItem(item, Player, true, true)` (0x79ea40) on it.
+- Before: the borrowed citizen took it (lost-and-found check, speech, food is consumed, else `EmptySlot` + `SetInInventory(citizen)`). `ItemSync` sent that as "player X holds it", which on X's machine set `inInventory = Player` without an inventory slot: the item was gone.
+- Now `ItemSync.GiveToPlayer` (prefix on `TryGiveItem`, only for a remote player's body) empties our slot and puts the item with the body as the game does, unreported, and sends `ItemEventKind.Give` (holder = the receiving player). On that player's machine `ReceiveGift` runs `FirstPersonItemController.PickUpItem`, whose normal `IntoInventory` report tells everyone. No free slot: the item is put down at the receiver's feet (reported as ours → out of inventory → moved). Other machines keep it with the receiver's body until that report. Both get a notification.
+- Limits: `PickUpItem` runs the game's own "is taking this illegal here" check on the receiver, so a gift taken inside somebody's home may count like picking it up there. Both machines need 0.9.69; an older receiver ignores the event and the item stays "with its body" (lost until reload).
+- `Give` may be reached from the first-person arm's animation; if the game dies on giving, put `GiveToPlayer` into `BepInEx/sodcoop_skip_patches`.
+
 ## 0.9.68: a room's lighting follows its synced lamps (protocol v49, untested in game)
 
 - Seen: on the other machine a room's lamps switched with the partner's, but the room stayed as dark (or bright) as before.
