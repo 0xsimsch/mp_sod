@@ -1,8 +1,9 @@
-SodCoop: Shadows of Doubt co-op test build
-==========================================
+Doubt Together (Co-op): Shadows of Doubt co-op mod
+====================================================
 
-This is an early test: we are checking whether two machines can connect over Steam and play in the same world.
-Expect rough edges. Your own saves are never written by the mod.
+Two-player co-op over Steam: one player hosts their sandbox world, a friend joins it, and both work the
+same cases in the same city. Unofficial mod, still maturing - expect rough edges. Your own saves are
+never written by the mod. Everything runs peer-to-peer between the two of you, no servers.
 
 Install
 -------
@@ -14,7 +15,10 @@ Install
        WINEDLLOVERRIDES="winhttp=n,b" %command%
    (Windows: nothing to do.)
 4. Start the game. The FIRST start takes a few minutes longer with a black or frozen window: BepInEx generates
-   its files for this game version (BepInEx/interop). Let it finish. When the mod is loaded, BepInEx/sodcoop.log exists and starts with "SoD Co-op <version> loaded".
+   its files for this game version (BepInEx/interop). Let it finish. When the mod is loaded, BepInEx/sodcoop.log
+   exists and starts with "SoD Co-op <version> loaded".
+
+Both players install the same version.
 
 Join the host
 -------------
@@ -41,7 +45,7 @@ Keys
 
 If something goes wrong
 -----------------------
-Send BOTH machines' files back:
+Report it at https://github.com/0xsimsch/mp_sod/issues and attach, from BOTH machines:
    BepInEx/sodcoop.log      (the mod's log; restarting the game moves it to sodcoop.prev.log, so send both)
    BepInEx/sodcoop.prev.log
    BepInEx/LogOutput.log    (BepInEx's log)

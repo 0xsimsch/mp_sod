@@ -1,11 +1,13 @@
-"""Zip everything a friend needs to join a SodCoop session: BepInEx 6 IL2CPP exactly as installed here,
-SodCoop.dll and a config set to join over Steam. The friend unzips it into their "Shadows of Doubt" folder.
+"""The ready-to-unzip manual-install package: BepInEx 6 IL2CPP exactly as installed here, SodCoop.dll and a
+config set to join over Steam - everything a player who uses no mod manager needs. This is the zip the GitHub
+release attaches; the friend test phase it was named after is over. The player unzips it into their
+"Shadows of Doubt" folder.
 
 usage: python3 -I make_bundle.py [--with-interop] [GAME_DIR] [OUT_DIR]
   GAME_DIR        default ~/.local/share/Steam/steamapps/common/Shadows of Doubt (must have BepInEx + SodCoop built)
   OUT_DIR         default <repo>/dist
   --with-interop  also ship BepInEx/interop. It is generated from the game's own code, so by default it is left
-                  out and the friend's BepInEx regenerates it on the first start (a few extra minutes).
+                  out and the player's BepInEx regenerates it on the first start (a few extra minutes).
 
 Build the plugin first: nix shell nixpkgs#dotnet-sdk_8 -c dotnet build -c Release (in plugins/SodCoop).
 """
@@ -81,7 +83,7 @@ def main():
 
     version = mod_version()
     os.makedirs(out_dir, exist_ok=True)
-    out = os.path.join(out_dir, f"SodCoop-{version}-friend.zip")
+    out = os.path.join(out_dir, f"DoubtTogether-{version}-with-bepinex.zip")
     count = 0
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         def add(path, arc):
@@ -106,7 +108,7 @@ def main():
         z.writestr("BepInEx/config/BepInEx.cfg", BEPINEX_CFG)
         z.writestr("BepInEx/config/mp_sod.coop.cfg", CONFIG)
         add(dll, "BepInEx/plugins/SodCoop.dll")
-        add(os.path.join(HERE, "FRIEND_README.txt"), "SodCoop-README.txt")
+        add(os.path.join(HERE, "PLAYER_README.txt"), "DoubtTogether-README.txt")
 
     print(f"{out}: {count} files, {os.path.getsize(out) / 1e6:.1f} MB (SodCoop {version}, interop {'included' if with_interop else 'regenerated on first start'})")
 

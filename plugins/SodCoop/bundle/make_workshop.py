@@ -12,8 +12,8 @@ usage: python3 -I make_workshop.py [--item-id N] [--install-local] [GAME_DIR] [O
                    button. Updates stay manual: re-upload from the game (workshop has no CI story).
 
 The interop assemblies stay out of this public package: they are generated from the game's own code and every
-player's loader regenerates them on the first start. For the mod manager route use make_thunderstore.py, for a
-plain zip-to-a-friend use make_bundle.py - all three take the same built plugin.
+player's loader regenerates them on the first start. For the mod-manager route use make_thunderstore.py, for the
+no-mod-manager GitHub release zip use make_bundle.py - all three take the same built plugin.
 """
 import os
 import shutil

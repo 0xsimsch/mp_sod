@@ -24,8 +24,8 @@ and both work the same cases in the same city — the same evidence, the same ci
 ## Install
 
 With a mod manager: install "Doubt Together (Co-op)" and start the game through the manager.
-Manually: take the ready-to-unzip bundle from the [GitHub releases](https://github.com/0xsimsch/mp_sod/releases)
-(contains BepInEx + the mod) into the game folder; on Linux/Steam Deck also set the launch option
+Manually: take `DoubtTogether-<version>-with-bepinex.zip` from the [GitHub releases](https://github.com/0xsimsch/mp_sod/releases)
+(BepInEx + the mod inside) into the game folder; on Linux/Steam Deck also set the launch option
 `WINEDLLOVERRIDES="winhttp=n,b" %command%`.
 
 The first start after installing takes a few minutes longer while BepInEx prepares itself.

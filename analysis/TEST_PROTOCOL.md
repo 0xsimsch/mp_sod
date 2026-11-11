@@ -319,7 +319,7 @@ Summary: P __  F __  ! __  ~ __  - __     Defects filed: DEFECT-__ …
 | ROB-14 | Packet loss (if you can netem 5–10% UDP) | Reliable messages survive; poses drop gracefully | ~ optional | |
 | ROB-15 | 2 h continuous session (LONG) | No drift accumulation: spot-check 20 doors/items/case state; memory steady; logs rotate | LONG-1..3 | |
 | ROB-16 | Log size growth | No runaway spam at default `VerboseLog=false` | `ls -l sodcoop.log` | |
-| ROB-17 | Uninstall after testing (friend build) | Delete `winhttp.dll` → vanilla game, no other residue | FRIEND_README uninstall | |
+| ROB-17 | Uninstall after testing (friend build) | Delete `winhttp.dll` → vanilla game, no other residue | PLAYER_README uninstall | |
 
 ## 15. Regressions (REG) — fixed bugs, check them each release
 
