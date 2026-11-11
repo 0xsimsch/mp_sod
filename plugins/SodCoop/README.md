@@ -77,6 +77,12 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.77: no "you passed out" spam while the partner stays awake (protocol v49, untested in game)
+
+- Seen: a KO'd player whose partner did not sleep/wait got "you passed out… you will wake up soon" over and over during the long normal-speed wait.
+- Why: with the clock held at normal, the game's KO "first frame" block (message, bar, veryFast request) re-runs whenever it thinks the speed isn't veryFast; `KoWaitOnce` kept it off by standing in veryFast, but only while the bar's interaction action was still active. From the binary: that action counts down in **real** deltaTime (`InteractionController.Update` 0x722cbf, completion at 0x722cef) — designed for the game's own veryFast wait — so at normal speed it ended after ~1.5 s, its expiry cleared the flag and let the block (and the message) through, then re-armed it: one message every ~1.5 s for the whole wait.
+- `KoWaitOnce` now remembers per blackout that the block has had its one run (the message and the bar still appear once; the flag resets when the player starts falling, including the second blackout after paying medical fees). `HostTick`'s "wait started" check uses the same flag.
+
 ## 0.9.76: another player's throw breaking something doesn't make us a criminal (protocol v49, untested in game)
 
 - Seen (0.9.74): the client threw things around while trespassing; as soon as an object broke, citizens near the host (in a neutral place, another building) saw the **host** doing something illegal and attacked it. Log: `STATUS fine vandalism at address 46 is P1's` followed by `SEES-ILLEGAL observer=citizen 122 target=P0 "Host"`.

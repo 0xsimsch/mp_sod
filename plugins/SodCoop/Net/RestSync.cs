@@ -166,9 +166,11 @@ public static class RestSync
         var sd = SessionData.Instance;
         if (sd == null || hostRest == RestKind.None) return; // an awake host runs its clock as usual
         // A KO'd host speeds up only once the game's KO wait has started (progress bar up): the game sets that up only
-        // while the speed isn't veryFast yet.
+        // while the speed isn't veryFast yet. The bar's action ends on its own after a while — the shown flag keeps
+        // saying "waiting" (0.9.77).
         bool koWaiting = hostRest != RestKind.KO
-            || (Player.Instance.playerKOFadeOut && InteractionController.Instance != null && InteractionController.Instance.activeInteractionAction);
+            || (Player.Instance.playerKOFadeOut && (KoWaitOnce.KoBlockShown
+                || InteractionController.Instance != null && InteractionController.Instance.activeInteractionAction));
         var want = AllResting && koWaiting ? _restSpeed : SessionData.TimeSpeed.normal;
         if (sd.currentTimeSpeed != want) SetSpeed(sd, want);
     }
@@ -193,22 +195,36 @@ public static class RestSync
     /// <summary>
     /// The game's KO wait starts with "if the speed isn't veryFast: set veryFast, show the fast-forward arrow, the KO
     /// progress bar and the KO message". With the speed kept at normal that would run every frame (message and speed
-    /// request each frame). Once it ran (the progress bar's interaction action is active), Player.Update sees veryFast
-    /// for the rest of the wait; the real speed is put back right after.
+    /// request each frame). Once it ran, Player.Update sees veryFast for the rest of the wait; the real speed is put
+    /// back right after. The progress-bar action it creates ends on its own after about KOTime REAL seconds (its
+    /// countdown uses Time.deltaTime; 0.9.76: while the partner kept the clock at normal the wait outlasted it and
+    /// every expiry re-ran the block — "you passed out" every ~1.5 s), so "the action is active" can't mark that the
+    /// block has had its one run. We remember it per blackout: the block runs once (message, bar), then the stand-in
+    /// veryFast holds it off to the end of the wait, active action or not.
     /// </summary>
     [HarmonyPatch(typeof(Player), "Update")]
     static class KoWaitOnce
     {
+        static bool _koBlockShown;
+
+        /// <summary>The KO's one "first frame" block (message, bar) has run.</summary>
+        internal static bool KoBlockShown => _koBlockShown;
+
         static void Prefix(Player __instance, out int __state)
         {
             __state = -1;
             var sd = SessionData.Instance;
-            if (sd == null || !__instance.playerKOInProgress || !__instance.playerKOFadeOut) return;
-            if (sd.currentTimeSpeed == SessionData.TimeSpeed.veryFast || !LocalKoInSession()) return;
+            if (sd == null || !__instance.playerKOInProgress) return;
+            if (!__instance.playerKOFadeOut) { _koBlockShown = false; return; } // falling: also resets for a second blackout
+            if (__instance.KOTimePassed >= __instance.KOTime) { _koBlockShown = false; return; } // wait over: C/D now
+            if (!LocalKoInSession()) return;
             var ic = InteractionController.Instance;
-            if (ic == null || !ic.activeInteractionAction) return;
-            __state = (int)sd.currentTimeSpeed;
-            sd.currentTimeSpeed = SessionData.TimeSpeed.veryFast;
+            if (ic != null && ic.activeInteractionAction) _koBlockShown = true; // the block has run: its bar is up
+            if (_koBlockShown && sd.currentTimeSpeed != SessionData.TimeSpeed.veryFast)
+            {
+                __state = (int)sd.currentTimeSpeed;
+                sd.currentTimeSpeed = SessionData.TimeSpeed.veryFast;
+            }
         }
 
         static void Postfix(int __state)
