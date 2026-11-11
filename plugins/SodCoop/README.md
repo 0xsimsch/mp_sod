@@ -77,6 +77,11 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.68: no more "found evidence" notices (protocol v49, untested in game)
+
+- Seen in game: "X found new evidence" came up constantly. Every piece of evidence the partner finds sends a case event, so during a searched flat it fired again and again even after grouping (0.9.x: one notice per 15 s per player). It adds nothing while searching.
+- Removed the notice: `CaseSync.Apply` no longer counts `EvidenceFound`, the grouping (`NoteEvidence`) and the flush are gone; `CaseSync.FlushNotices` became `CaseSync.Tick` and only retries waiting case events. Evidence and facts still sync exactly as before; the other partner notices (join/leave, knocked out, objectives, case hand-in and solved, jobs, resting) are untouched.
+
 ## 0.9.67: fight sounds on every machine (protocol v49, new message 57, untested in game)
 
 - Question: does the client hear hits? Read from the binary: only its own. A player's punch / weapon impact is played in `FirstPersonItemController.MeleeAttack` and `CounterAttack` (`AudioControls.punchHit*`, the weapon's `impactEvent`) on that player's machine. A citizen's attack sound is `MurderWeaponPreset.fireEvent` in `NewAIController.AttackUpdate` (0xac8f00, gunshots through `Toolbox.Shoot` too) and its impact `impactEvent` / `impactEventBody` in `DamageColliderController.ProcessHit` (0x6c0b20); the damage collider is made in `AttackUpdate`. A client's citizens have no AI, so neither runs there. `CitizenAnimationEvents.MeleeAttackTrigger` is an empty function, `Citizen/Player.RecieveDamage` and `TakeDamageRecoil` play nothing.
