@@ -187,13 +187,27 @@ public static class StatusSync
     [HarmonyPatch(typeof(Human), nameof(Human.IsTrespassing))]
     static class Verdict
     {
-        static bool Prefix(Human __instance, ref bool __result, ref int trespassEscalation)
+        static bool Prefix(Human __instance, NewRoom room, ref bool __result, ref int trespassEscalation)
         {
             if (!IsHost) return true;
             var owner = PlayerRegistry.RemoteOwnerOf(__instance);
             if (owner == null || !_verdicts.TryGetValue(owner.Id, out var v) || Time.unscaledTime - v.at > VerdictMaxAge) return true;
             __result = v.trespassing;
             trespassEscalation = v.escalation;
+            // The game's Human.IsTrespassing ends with "+ room.gameLocation.GetAdditionalEscalation(this)": +1 once
+            // witnesses have had the trespasser in sight at that location for GameplayControls.additionalEscalationTime.
+            // That time is kept where the witnesses are (here, per body); on the client nobody sees its player, so its
+            // verdict never has it. Without it a body stayed at the location's base level: where that is 0, witnesses
+            // told the client off for ever and never went for it (seen with 0.9.70).
+            if (v.trespassing)
+            {
+                try
+                {
+                    var loc = room != null ? room.gameLocation : null;
+                    if (loc != null) trespassEscalation += loc.GetAdditionalEscalation(__instance);
+                }
+                catch { }
+            }
             return false;
         }
     }

@@ -77,6 +77,14 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.71: witnesses of a trespassing client escalate (protocol v49, host side only, untested in game)
+
+- Seen: a citizen who catches the client trespassing tells it off, again and again, and never turns on it.
+- How the game escalates, from the binary: `Human.IsTrespassing` (0x77de10; `Player.IsTrespassing` 0x462100 ends in it) returns the location's base level **plus** `room.gameLocation.GetAdditionalEscalation(actor)` (0x504060). That is 1 once `NewGameLocation.escalation[actor].timeEscalation` has reached `GameplayControls.additionalEscalationTime`; the time is added by `AddEscalation` (0x503a00) from `Actor.SightingCheck` and `SecuritySystem.Update` while a witness there has the trespasser in sight, and taken away again in `CitizenBehaviour.GameWorldCheck` (`RemoveEscalation`, 0x5041d0) once the actor stops trespassing or leaves. `Player.UpdateIllegalStatus` puts the sum into `trespassingEscalation`; `SightingCheck` (0x5eb71a) starts from that field and, while it is below 2, adds `GetAdditionalEscalation` once more before `OnInvestigate(target, escalation)`. So a base-0 place goes 0 → 2 for the game's own player after the escalation time: told off first, attacked later.
+- In co-op the host judges a client's body by that client's verdict (`StatusSync.Verdict`, for its keys and guest passes). The verdict is the client's `Player.IsTrespassing`, and on the client nobody sees its player, so the additional level in it is always 0. The body's `trespassingEscalation` stayed at the base level and only the one addition in `SightingCheck` was left: base 0 never got past 1.
+- Fix: the host adds its own `GetAdditionalEscalation(body)` for the room's location to a "trespassing" verdict, as the original function does. `TRESPASS body=P1 … escalation=` in the host log now rises by one after the escalation time.
+- Not changed: base-1 and base-2 places already escalated (log of 2026-11-11: citizens 81 and 84 attacked P1 there). Loitering (`playerLoiteringTimer`) is still tracked for the host's player only.
+
 ## 0.9.70: the two 0.9.68 lines merged (protocol v49)
 
 - Two machines each built a 0.9.68: the released one (no more "found evidence" notices) and a local one (room lighting), followed by a local 0.9.69 (giving items). This version has all three; nothing else changed. The release tagged v0.9.68 is the notices one; the lighting 0.9.68 and 0.9.69 were never released on their own.
