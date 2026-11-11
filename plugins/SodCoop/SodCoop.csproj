@@ -6,6 +6,8 @@
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- Full text in the repository root: LICENSE. Packages carry it as LICENSE.txt. -->
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <!-- Game install; override with -p:GameDir=... -->
     <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Shadows of Doubt</GameDir>
     <!-- Game types to compile against. CI uses the stripped copies in lib/refs: -p:InteropDir=../../lib/refs -->

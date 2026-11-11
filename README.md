@@ -1,6 +1,6 @@
 # SodCoop: co-op for Shadows of Doubt
 
-An unofficial two-player co-op mod for [Shadows of Doubt](https://store.steampowered.com/app/986130/Shadows_of_Doubt/) (game version v42.04). One player hosts their own sandbox world and a friend joins over Steam. Both play in the same city, work the same case and see each other.
+An unofficial two-player co-op mod for [Shadows of Doubt](https://store.steampowered.com/app/986130/Shadows_of_Doubt/) (game version v42.04). One player hosts their own sandbox world and a friend joins over Steam. Both play in the same city, work the same case and see each other. Published to players as **Doubt Together (Co-op)**; code, plugin GUID and file names stay `SodCoop`. Licensed under [GPL-3.0-or-later](LICENSE).
 
 **Status: early test build.** Many systems are synced, but most were never tested in a real two-player session. Expect rough edges.
 
@@ -21,7 +21,7 @@ Story mode isn't supported (a warning is shown). Apartments and decor, witness m
 
 ## Install and play
 
-You need BepInEx 6 (IL2CPP, bleeding edge) in the game folder, plus `SodCoop.dll` in `BepInEx/plugins`. `python3 -I plugins/SodCoop/bundle/make_bundle.py` builds a ready-to-unzip package from a working install. Its player instructions are in [`plugins/SodCoop/bundle/FRIEND_README.txt`](plugins/SodCoop/bundle/FRIEND_README.txt).
+You need BepInEx 6 (IL2CPP, bleeding edge) in the game folder, plus `SodCoop.dll` in `BepInEx/plugins`. `python3 -I plugins/SodCoop/bundle/make_bundle.py` builds a ready-to-unzip package from a working install. Its player instructions are in [`plugins/SodCoop/bundle/FRIEND_README.txt`](plugins/SodCoop/bundle/FRIEND_README.txt). `python3 -I plugins/SodCoop/bundle/make_thunderstore.py` builds the Thunderstore package of the same version (mod-manager install, BepInExPack as a dependency).
 
 On Linux/Proton, set the launch option `WINEDLLOVERRIDES="winhttp=n,b" %command%`.
 
