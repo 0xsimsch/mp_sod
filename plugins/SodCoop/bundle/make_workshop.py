@@ -107,6 +107,10 @@ def main():
                 add_file(p, os.path.relpath(p, game))
 
     for f in loader_files.TOP_FILES:
+        if f == "changelog.txt":
+            # BepInEx's own changelog: the in-game upload button pre-fills the item's update changelog
+            # from a changelog.txt in the mod folder, and published the loader's history as ours.
+            continue
         p = os.path.join(game, f)
         if os.path.exists(p):
             add_file(p, f)
