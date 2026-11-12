@@ -1,7 +1,7 @@
 # Doubt Together (Co-op)
 
 Two-player co-op for Shadows of Doubt over Steam: one player hosts their sandbox world, a friend joins it,
-and both work the same cases in the same city — the same evidence, the same citizens, the same clock.
+and both work the same cases in the same city. Same evidence, same citizens, same clock.
 
 ## What is shared
 
@@ -11,7 +11,7 @@ and both work the same cases in the same city — the same evidence, the same ci
 - **The city**: the host simulates it, so both see the same people in the same places. Citizens react to
   both players; fights and damage go both ways.
 - **Time**: one clock. It speeds up only when everyone rests; a knocked-out partner never skips your time.
-- **Your partner**: a full character in the world — you see them, hear their footsteps, and can watch them
+- **Your partner**: a full character in the world. You see them, hear their footsteps, and can watch them
   in third person while you recover from a knock-out.
 - Money and inventory stay per player.
 
@@ -32,7 +32,7 @@ The first start after installing takes a few minutes longer while BepInEx prepar
 
 ## Play
 
-1. The host loads (or starts) a **sandbox** save and presses F11 — or uses the "Host Co-op" button in the
+1. The host loads (or starts) a **sandbox** save and presses F11, or uses the "Host Co-op" button in the
    main menu.
 2. The friend sees the host in their main menu as "Join <name>" and clicks it (F11 joins the first host
    found), or right-clicks them in the Steam friends list > "Join game".
@@ -43,12 +43,12 @@ Ctrl+Delete leaves the session. Story mode is not supported (a warning appears).
 ## Troubleshooting
 
 `BepInEx/sodcoop.log` in the game folder tells both players what happened. Please attach it to bug reports:
-[github.com/0xsimsch/mp_sod/issues](https://github.com/0xsimsch/mp_sod/issues) — or, if you installed the mod
-from the Steam Workshop, the comment section at the bottom of the [Workshop item](https://steamcommunity.com/app/986130/workshop/) works too.
+[github.com/0xsimsch/mp_sod/issues](https://github.com/0xsimsch/mp_sod/issues). If you installed the mod from
+the Steam Workshop, the comment section at the bottom of the [Workshop item](https://steamcommunity.com/app/986130/workshop/) works too.
 
 ## Privacy
 
-Everything runs peer-to-peer between the two of you over Steam — no servers. Your partner sees your Steam
+Everything runs peer-to-peer between the two of you over Steam, no servers. Your partner sees your Steam
 name (or the name in the mod's config), your character and your world actions.
 
 ## License
