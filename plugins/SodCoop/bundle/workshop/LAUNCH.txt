@@ -12,7 +12,7 @@ Windows:
 
 Linux / Steam Play (Proton) / Steam Deck:
 
-sh "../../workshop/content/986130/__ITEM_ID__/SoDCoop.sh"; %command%
+sh "../../workshop/content/986130/__ITEM_ID__/SoDCoop.sh" %command%
 
 How it works: Steam runs the script first, from the game folder. The script installs the
 bundled BepInEx + Doubt Together into the game folder (creating files only where nothing

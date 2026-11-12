@@ -1,12 +1,12 @@
 #!/bin/sh
 # Doubt Together (Co-op) bootstrap for Linux / Steam Play (Proton).
 #
-# Steam runs this from the game folder before the game would start (Steam > Properties > Launch options):
-#   sh "../../workshop/content/986130/__ITEM_ID__/SoDCoop.sh"; %command%
+# Steam runs this from the game folder with its real launch command appended (Steam > Properties > Launch options):
+#   sh "../../workshop/content/986130/__ITEM_ID__/SoDCoop.sh" %command%
 #
 # What it does, in order:
 #  - if the in-game Mods menu switched this item off: remove the loader files it had installed,
-#    then let Steam start the plain game;
+#    then exec Steam's real command so the plain game still starts;
 #  - otherwise copy the bundled BepInEx loader into the game folder (only where nothing is there yet,
 #    so an existing mod-manager setup is never overwritten), always refresh SodCoop.dll,
 #    add the WINEDLLOVERRIDES needed under Proton, and exec Steam's real launch command ("$@").
@@ -19,6 +19,7 @@ mod="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"  # this item's workshop folde
 # Safety: only ever write into a real Shadows of Doubt folder.
 if [ ! -f "$game/Shadows of Doubt.exe" ]; then
     echo "[DoubtTogether] not in the game folder (cwd is $game), doing nothing"
+    if [ "$#" -gt 0 ]; then exec "$@"; fi  # still launch the plain game
     exit 0
 fi
 
@@ -32,6 +33,7 @@ if grep -Eq '"enabled"[[:space:]]*:[[:space:]]*false' "$mod/ModSettings.txt" 2>/
         rm -rf "$game/dotnet"
     fi
     echo "[DoubtTogether] switched off in the Mods menu, loader removed"
+    if [ "$#" -gt 0 ]; then exec "$@"; fi  # still launch the plain game, without our env changes
     exit 0
 fi
 
