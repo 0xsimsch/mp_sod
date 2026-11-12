@@ -129,6 +129,12 @@ def main():
     add_file(dll, os.path.join("BepInEx", "plugins", "SodCoop.dll"))
     shutil.copytree(os.path.join(TPL_DIR, "ThirdParty"), os.path.join(item_dir, "ThirdParty"))
     count += sum(len(files) for _, _, files in os.walk(os.path.join(TPL_DIR, "ThirdParty")))
+    # Workshop gallery tile: the game's uploader (ModController.UpdateWorkshopItem) passes exactly
+    # <mod folder>/Preview.png to SteamUGC.SetItemPreview when it exists. Steam rejects previews over 1 MB.
+    preview = os.path.join(PLUGIN_DIR, "Assets", "doubt-together-workshop-preview.png")
+    if os.path.getsize(preview) >= 1024 * 1024:
+        sys.exit(f"{preview} is over Steam's 1 MB preview limit")
+    add_file(preview, "Preview.png")
 
     # A zip with the same tree: release attachment, and proof of what a subscription contains.
     os.makedirs(out_dir, exist_ok=True)
