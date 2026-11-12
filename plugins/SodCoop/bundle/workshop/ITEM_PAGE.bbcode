@@ -24,7 +24,7 @@ Linux / Steam Play (Proton) / Steam Deck:
 [*]Host: load a [b]sandbox[/b] save, press F11 (or the Host Co-op button in the main menu). The friend sees the host as "Join <name>" in their main menu, or right-clicks them in the Steam friends list > Join game. Ctrl+Delete leaves the session.
 [/list]
 
-[h2]How it works, honestly[/h2]
+[h2]How it works[/h2]
 The game's official workshop support only covers data mods, so this item delivers a code mod (BepInEx) the way a few other workshop items do: a small bootstrap script that Steam runs before the game. It copies the bundled loader into the game folder — [i]creating files only where nothing is there yet[/i], so an existing mod-manager setup is never overwritten — and then lets Steam start the game.
 [u]Uninstall[/u]: switch the mod off in the in-game Mods menu and start the game once — the bootstrap then removes the loader's activation files (winhttp.dll, doorstop_config.ini, dotnet\) and the mod DLL from the game folder, and the game starts vanilla. Then unsubscribe and clear the launch option. Loader cache folders (BepInEx\core, unity-libs) stay behind and do nothing on their own; delete them by hand if you want everything gone.
 
@@ -37,6 +37,8 @@ The game's official workshop support only covers data mods, so this item deliver
 [*]Troubleshooting: [b]BepInEx/sodcoop.log[/b] in the game folder tells both players what happened.
 [/list]
 
-[h2]Source and license[/h2]
-GPL-3.0-or-later, source and issue tracker: [url=https://github.com/0xsimsch/mp_sod]github.com/0xsimsch/mp_sod[/url]. The bundled mod loader (BepInEx, Unity Doorstop, Il2CppInterop, Harmony, .NET) ships unmodified under its own licenses — see ThirdParty/ in the item and in the repository.
+[h2]Source, contributors and license[/h2]
+This project is open source: [url=https://github.com/0xsimsch/mp_sod]github.com/0xsimsch/mp_sod[/url] — source, issue tracker and updates all live there.
+[b]Contributors:[/b] 0xsimsch, Hunter99
+Licensed under GPL-3.0-or-later. The bundled mod loader (BepInEx, Unity Doorstop, Il2CppInterop, Harmony, .NET) ships unmodified under its own licenses — see ThirdParty/ in the item and in the repository.
 Unofficial fan mod; not affiliated with ColePowered Games or Fireshine Games.

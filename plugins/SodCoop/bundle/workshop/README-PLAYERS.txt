@@ -24,8 +24,9 @@ Play:
 Privacy: everything runs peer-to-peer between the two of you over Steam, no servers.
 Your partner sees your Steam name, your character and what you do in the shared city.
 
-Trouble? BepInEx/sodcoop.log in the game folder tells what happened. Source, bug reports
-and updates: https://github.com/0xsimsch/mp_sod  (GPL-3.0-or-later).
+Trouble? BepInEx/sodcoop.log in the game folder tells what happened. This project is open source:
+https://github.com/0xsimsch/mp_sod  (GPL-3.0-or-later) — source, bug reports and updates live there.
+Contributors: 0xsimsch, Hunter99
 Third-party licenses for the bundled loader: ThirdParty/.
 
 Unofficial fan mod, not affiliated with ColePowered Games or Fireshine Games.

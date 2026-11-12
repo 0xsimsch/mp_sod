@@ -56,3 +56,8 @@ Uninstall
 ---------
 Delete winhttp.dll (that alone disables the mod), or also doorstop_config.ini, .doorstop_version,
 changelog.txt and the BepInEx and dotnet folders. On Linux also clear the launch option.
+
+Open source
+-----------
+This project is open source: https://github.com/0xsimsch/mp_sod (GPL-3.0-or-later).
+Contributors: 0xsimsch, Hunter99

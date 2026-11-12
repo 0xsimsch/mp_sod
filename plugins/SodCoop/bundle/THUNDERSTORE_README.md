@@ -52,5 +52,8 @@ name (or the name in the mod's config), your character and your world actions.
 
 ## License
 
-GPL-3.0-or-later, source on [GitHub](https://github.com/0xsimsch/mp_sod). Unofficial fan mod; not affiliated
+This project is open source: [github.com/0xsimsch/mp_sod](https://github.com/0xsimsch/mp_sod).
+**Contributors:** 0xsimsch, Hunter99
+
+GPL-3.0-or-later. Unofficial fan mod; not affiliated
 with ColePowered Games or Fireshine Games.
