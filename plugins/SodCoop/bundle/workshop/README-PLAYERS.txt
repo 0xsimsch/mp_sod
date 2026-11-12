@@ -1,7 +1,7 @@
 Doubt Together (Co-op)
 ======================
 
-Two-player co-op for Shadows of Doubt over Steam: one player hosts their sandbox world,
+Co-op multiplayer for Shadows of Doubt over Steam: one player hosts their sandbox world,
 a friend joins it, and both work the same cases in the same city - the same evidence,
 the same citizens, the same clock. Money and inventory stay per player.
 

@@ -1,7 +1,7 @@
 Doubt Together (Co-op): Shadows of Doubt co-op mod
 ====================================================
 
-Two-player co-op over Steam: one player hosts their sandbox world, a friend joins it, and both work the
+Co-op multiplayer over Steam: one player hosts their sandbox world, a friend joins it, and both work the
 same cases in the same city. Unofficial mod, still maturing - expect rough edges. Your own saves are
 never written by the mod. Everything runs peer-to-peer between the two of you, no servers.
 

@@ -1,6 +1,6 @@
 {
     "name": "Doubt Together (Co-op)",
-    "summary": "Two-player co-op over Steam: host your city, a friend joins it, same cases same clock.",
+    "summary": "Co-op multiplayer over Steam: host your city, a friend joins it, same cases same clock.",
     "creator": "Hunter99",
     "version": "__VERSION__",
     "loadOrderValue": 100,
