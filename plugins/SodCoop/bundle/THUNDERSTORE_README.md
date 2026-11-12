@@ -43,7 +43,8 @@ Ctrl+Delete leaves the session. Story mode is not supported (a warning appears).
 ## Troubleshooting
 
 `BepInEx/sodcoop.log` in the game folder tells both players what happened. Please attach it to bug reports:
-[github.com/0xsimsch/mp_sod/issues](https://github.com/0xsimsch/mp_sod/issues).
+[github.com/0xsimsch/mp_sod/issues](https://github.com/0xsimsch/mp_sod/issues) — or, if you installed the mod
+from the Steam Workshop, the comment section at the bottom of the [Workshop item](https://steamcommunity.com/app/986130/workshop/) works too.
 
 ## Privacy
 

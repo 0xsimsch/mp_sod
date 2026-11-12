@@ -45,7 +45,8 @@ Keys
 
 If something goes wrong
 -----------------------
-Report it at https://github.com/0xsimsch/mp_sod/issues and attach, from BOTH machines:
+Report it at https://github.com/0xsimsch/mp_sod/issues — or, if you installed the mod from the Steam
+Workshop, the comment section at the bottom of the item page works too — and attach, from BOTH machines:
    BepInEx/sodcoop.log      (the mod's log; restarting the game moves it to sodcoop.prev.log, so send both)
    BepInEx/sodcoop.prev.log
    BepInEx/LogOutput.log    (BepInEx's log)
