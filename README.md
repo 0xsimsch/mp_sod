@@ -23,7 +23,19 @@ Story mode isn't supported (a warning is shown). Apartments and decor, witness m
 
 Three channels, same mod in all of them. **Both players need the same version** (checked when they connect), and the game needs to be version v42.04 (bottom right of the main menu). Each channel brings the mod runtime (BepInEx 6 IL2CPP) itself.
 
-1. **Steam Workshop** — subscribe, paste one launch line; a bootstrap installs the bundled loader on every start (only where nothing is there yet, so an existing mod setup survives). Windows and Linux/Steam Deck. Item page: *(link once uploaded)*.
+1. **Steam Workshop** — [subscribe](https://steamcommunity.com/sharedfiles/filedetails/?id=3838532350), then paste one launch line (Steam > Shadows of Doubt > Properties > Launch options; use the field for your OS). A bootstrap installs the bundled loader on every start (only where nothing is there yet, so an existing mod setup survives). Windows and Linux/Steam Deck.
+
+   Windows:
+
+   ```
+   "..\..\workshop\content\986130\3838532350\SoDCoop.cmd" & %command%
+   ```
+
+   Linux / Steam Play (Proton) / Steam Deck:
+
+   ```
+   sh "../../workshop/content/986130/3838532350/SoDCoop.sh" %command%
+   ```
 2. **Thunderstore** — install **Doubt Together (Co-op)** with a mod manager from [thunderstore.io/c/shadows-of-doubt](https://thunderstore.io/c/shadows-of-doubt/); it pulls BepInExPack_IL2CPP in as a dependency.
 3. **GitHub release, no mod manager** — download `DoubtTogether-<version>-with-bepinex.zip` from [Releases](https://github.com/0xsimsch/mp_sod/releases/latest) and unzip it INTO the game folder (Steam > right click > Manage > Browse local files), so that `winhttp.dll` ends up next to "Shadows of Doubt.exe"; **BepInEx is inside the zip**. On Linux/Steam Deck (Proton) also set the launch option `WINEDLLOVERRIDES="winhttp=n,b" %command%`. The first start takes a few minutes longer while the loader prepares itself. The full player instructions are in `DoubtTogether-README.txt` inside the zip.
 
