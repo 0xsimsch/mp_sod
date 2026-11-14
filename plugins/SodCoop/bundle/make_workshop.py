@@ -82,6 +82,17 @@ def main():
                       ("LAUNCH.txt", "\r\n"), ("README-PLAYERS.txt", "\r\n")]:
         with open(os.path.join(item_dir, name), "w", encoding="utf-8", newline="") as f:
             f.write(render(name, item_id, version, eol))
+    # Once the item exists, the game's in-menu Update button sends the folder to the
+    # workshopID stored in ModSettings.txt. Bake it in (in the numeric shape the game
+    # itself writes), otherwise --install-local would strip the link and the game would
+    # fall back to whatever id it still had in memory, updating a phantom item.
+    if item_id != "<ITEM_ID>":
+        settings = os.path.join(item_dir, "ModSettings.txt")
+        text = open(settings, encoding="utf-8").read()
+        text = text.replace('"modSource": "local",',
+                            '"modSource": 0,\n    "workshopPath": "",\n    "workshopID": "%s",' % item_id)
+        with open(settings, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
     # The Steam item description is page text, not part of the upload; next to the zip for the paste.
     page = os.path.join(out_dir, "workshop", "ITEM_PAGE.bbcode")
     with open(page, "w", encoding="utf-8", newline="") as f:
