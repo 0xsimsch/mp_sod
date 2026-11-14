@@ -28,7 +28,7 @@ Three channels, same mod in all of them. **Both players need the same version** 
    Windows:
 
    ```
-   ..\..\workshop\content\986130\3838532350\SoDCoop.cmd & %command%
+   C:\Windows\System32\cmd.exe /d /s /c "..\..\workshop\content\986130\3838532350\SoDCoop.cmd & %command%"
    ```
 
    Linux / Steam Play (Proton) / Steam Deck:

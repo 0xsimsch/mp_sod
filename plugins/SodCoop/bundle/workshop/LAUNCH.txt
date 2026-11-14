@@ -8,7 +8,7 @@ item's own number and is correct as printed.
 
 Windows:
 
-..\..\workshop\content\986130\__ITEM_ID__\SoDCoop.cmd & %command%
+C:\Windows\System32\cmd.exe /d /s /c "..\..\workshop\content\986130\__ITEM_ID__\SoDCoop.cmd & %command%"
 
 Linux / Steam Play (Proton) / Steam Deck:
 
