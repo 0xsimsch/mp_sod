@@ -77,6 +77,16 @@ From the first real tests with a friend (protocol v23):
 - **Look and hands** (0.6.1, protocol v25): poses carry camera pitch/yaw and the held item; `RemotePlayerBody.LateApply` turns the neck after the Animator and keeps a carried object in front of the body; drawn items get a visual-only copy in the right hand. `SetCarryItemType(1)` and the hand rotation are guesses.
 - **Diagnostics**: forwarded damage logs the client's health before/after (report: clients take no damage although hits arrive).
 
+## 0.9.83: Windows bootstrap finally works on the default Steam path (protocol v49, no mod change)
+
+First field reports from Windows: pressing Play did nothing, no BepInEx appeared (Croiss, Santa Maria, punchparty, plus a friend's machine to debug on). The bug was in `SoDCoop.cmd`, not in the mod. The file's only unquoted `%GAME%` expansion sat inside a parenthesized `if (...)` block, and cmd expands a block's body while it READS the block, before deciding the branch. `C:\Program Files (x86)`, the default Steam location, contains a parenthesis: the `)` of `(x86)` was read as the block's closing paren, the rest of the line became junk, and cmd aborted the script before its first command ran, silently, because Steam runs launch options console-less (`\Steam\steamapps\common\Shadows was unexpected at this time.` was the only witness, in a manual console). wine finds block terminators in raw text, so every wine repro passed on identical bytes, including trees with `(x86)` in the path: only real Windows at the default Steam path fails. Kimi K3 identified the construct from the error text when I could not.
+
+- `SoDCoop.cmd` rewritten flat: goto labels, zero multi-line parenthesized blocks, every expansion quoted; a header comment keeps it that way. Verified on the reporting machine (Windows 26290: starts, co-op played through) and on wine with a `Program Files (x86)` tree: both launch-line shapes install (dotnet 187/187 via the mkdir+copy fallback), toggle-off cleans up.
+- The Windows launch line is now the cmd wrapper `C:\Windows\System32\cmd.exe /d /s /c "..\..\workshop\content\986130\<ID>\SoDCoop.cmd & %command%"`, in the item page, `LAUNCH.txt` and the top-level README, plus a pinned item post so the three reporters get the answer without digging.
+- `make_workshop.py --item-id` bakes `"workshopID"` into the staged `ModSettings.txt`: the in-menu Update button sends the folder to exactly that id, and without it the game resurrected a stale id from a failed upload attempt (an id that was never committed as an item), so Update failed and the published files had silently never advanced past the original upload.
+
+No plugin code change; the version bump makes tagged release zips carry the fixed scripts.
+
 ## 0.9.82: Doubt Together (Co-op) — GPL license, Thunderstore and Steam Workshop packaging (protocol v49, no mod change)
 
 - The mod publishes under GPL-3.0-or-later: LICENSE in the repository, metadata in the project file, LICENSE.txt inside every built package.
