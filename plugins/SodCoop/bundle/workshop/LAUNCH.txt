@@ -8,7 +8,7 @@ item's own number and is correct as printed.
 
 Windows:
 
-"..\..\workshop\content\986130\__ITEM_ID__\SoDCoop.cmd" & %command%
+..\..\workshop\content\986130\__ITEM_ID__\SoDCoop.cmd & %command%
 
 Linux / Steam Play (Proton) / Steam Deck:
 
@@ -22,6 +22,10 @@ start the script removes the files it had installed and the game launches withou
 
 The FIRST start after subscribing takes a few minutes longer (dark window, maybe no
 mouse): the loader prepares itself for this game version. Let it finish once.
+
+If nothing happens when you press Play: the launch script writes what it did to
+BepInEx/sodcoop_bootstrap.log in the game folder (or to sodcoop_bootstrap.log in your
+temp folder when the game folder is not writable). Attach that file when asking for help.
 
 To uninstall: switch the mod off in the in-game Mods menu and start once - that removes
 the loader files and the mod from the game folder. Then unsubscribe and clear the launch
