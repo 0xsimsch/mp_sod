@@ -3,8 +3,8 @@ Doubt Together (Co-op) - launch options
 
 Steam > Shadows of Doubt > right click > Properties > Launch options.
 Paste ONE line - the one for your system (Steam has separate fields per OS, so you can
-keep both there and tick the right checkbox). Replace <ITEM_ID> with this item's id,
-the number in this item's page URL (workshop/item/?id=...).
+keep both there and tick the right checkbox). The item id in the paths below is this
+item's own number and is correct as printed.
 
 Windows:
 
