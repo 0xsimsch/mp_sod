@@ -92,10 +92,20 @@ public static class JobSync
 
     static readonly Dictionary<string, Il2CppSystem.Type> _types = new();
 
+    /// <summary>
+    /// SideJob and its subclasses, looked up once. Goes through <see cref="AccessTools.GetTypesFromAssembly"/> instead of
+    /// calling <c>Assembly.GetTypes()</c> here: UniverseLib (shipped with SOD.Common and BepInExConfigManager) patches
+    /// GetTypes, and with it loaded the JIT crashes the game (Internal CLR error 0x80131506, Windows) when it compiles an
+    /// optimized method (one with a loop) that calls GetTypes directly.
+    /// </summary>
+    static Type[] _jobTypes;
+    static Type[] JobTypes => _jobTypes ??= AccessTools.GetTypesFromAssembly(typeof(SideJob).Assembly)
+        .Where(t => typeof(SideJob).IsAssignableFrom(t)).ToArray();
+
     static Il2CppSystem.Type TypeOf(string name)
     {
         if (_types.TryGetValue(name, out var t)) return t;
-        var managed = typeof(SideJob).Assembly.GetTypes().FirstOrDefault(x => x.Name == name && typeof(SideJob).IsAssignableFrom(x));
+        var managed = JobTypes.FirstOrDefault(x => x.Name == name);
         t = managed != null ? Il2CppType.From(managed) : null;
         _types[name] = t;
         return t;
@@ -187,7 +197,7 @@ public static class JobSync
     static void CopySavedState(SideJob fromJob, SideJob toJob, string typeName)
     {
         // Both wrappers are typed SideJob; view them as the concrete class so its own fields are copied too.
-        var type = typeof(SideJob).Assembly.GetTypes().FirstOrDefault(x => x.Name == typeName && typeof(SideJob).IsAssignableFrom(x)) ?? typeof(SideJob);
+        var type = JobTypes.FirstOrDefault(x => x.Name == typeName) ?? typeof(SideJob);
         var cast = typeof(Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase).GetMethod("TryCast").MakeGenericMethod(type);
         object from = cast.Invoke(fromJob, null) ?? fromJob, to = cast.Invoke(toJob, null) ?? toJob;
         for (var t = type; t != null && typeof(SideJob).IsAssignableFrom(t); t = t.BaseType)
@@ -280,8 +290,7 @@ public static class JobSync
     /// <summary>The named methods on SideJob and every subclass that overrides them (overrides may skip base).</summary>
     static IEnumerable<MethodBase> JobMethods(params string[] names)
     {
-        var types = typeof(SideJob).Assembly.GetTypes().Where(t => typeof(SideJob).IsAssignableFrom(t));
-        foreach (var t in types)
+        foreach (var t in JobTypes)
             foreach (var m in t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
                 if (names.Contains(m.Name) && !m.IsAbstract) yield return m;
     }
